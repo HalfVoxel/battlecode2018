@@ -407,9 +407,12 @@ int main() {
     // std::uniform_int_distribution<int> distribution (0,8);
     // auto dice = std::bind ( distribution , generator );
     // Most methods return pointers; methods returning integers or enums are the only exception.
-    gc.queue_research(Knight);
-    gc.queue_research(Knight);
-    gc.queue_research(Knight);
+    gc.queue_research(Ranger);
+    gc.queue_research(Ranger);
+    gc.queue_research(Ranger);
+    gc.queue_research(Worker);
+    gc.queue_research(Worker);
+    gc.queue_research(Worker);
 
     if (bc_has_err()) {
         // If there was an error creating gc, just die.
