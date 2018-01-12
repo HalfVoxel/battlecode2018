@@ -54,7 +54,7 @@ struct MacroObject {
     bool operator<(const MacroObject& other) const {
         if (priority != other.priority) {
             return priority < other.priority;
-        }   
+        }
         return score < other.score;
     }
 };
@@ -68,14 +68,14 @@ struct BotWorker : BotUnit {
         if (!unit.get_location().is_on_map()) {
             return;
         }
-        
+
         const auto locus = unit.get_location().get_map_location();
         const auto nearby = gc.sense_nearby_units(locus, 2);
 
         auto unitMapLocation = unit.get_location().get_map_location();
-        
+
         const unsigned id = unit.get_id();
-        
+
         for (auto place : nearby) {
             //Building 'em blueprints
             if(gc.can_build(id, place.get_id())) {
@@ -257,6 +257,9 @@ struct BotKnight : BotUnit {
 };
 
 void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
+    auto id = unit.get_id();
+    if (!gc.is_move_ready(id)) return;
+
     auto unitMapLocation = unit.get_location().get_map_location();
     auto planet = unitMapLocation.get_planet();
     auto& planetMap = gc.get_starting_planet(planet);
@@ -277,8 +280,6 @@ void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
         }
     }
 
-    auto id = unit.get_id();
-
     PathfindingMap rewardMap(w, h);
     rewardMap.weights[target.get_x()][target.get_y()] = 1;
 
@@ -287,7 +288,7 @@ void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
 
     if (nextLocation != unitMapLocation) {
         auto d = unitMapLocation.direction_to(nextLocation);
-        if (gc.is_move_ready(id) && gc.can_move(id,d)){
+        if (gc.can_move(id,d)){
             gc.move_robot(id,d);
         }
     }
@@ -313,7 +314,8 @@ struct BotRanger : BotUnit {
             }
         }
 
-        for (auto enemy : gc.get_starting_planet((Planet)0).get_initial_units()) {
+        auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
+        for (auto& enemy : initial_units) {
             if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
                 auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
@@ -347,12 +349,10 @@ struct BotFactory : BotUnit {
 
     void tick() {
         auto garrison = unit.get_structure_garrison();
-        bool unloaded = false;
         if (garrison.size() > 0){
             Direction dir = (Direction) (rand() % 8);
             if (gc.can_unload(id, dir)){
                 gc.unload(id, dir);
-                unloaded = true;
             }
         }
         if (gc.can_produce_robot(id, Ranger)){
