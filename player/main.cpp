@@ -63,7 +63,6 @@ struct BotWorker : BotUnit {
             }
         }
         auto unitMapLocation = unit.get_location().get_map_location();
-        cout << unitMapLocation.get_x() << " " << unitMapLocation.get_y() << endl;
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();

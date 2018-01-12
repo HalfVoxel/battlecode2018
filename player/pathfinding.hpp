@@ -81,10 +81,6 @@ struct PathfindingMap {
     
 struct Pathfinder {
     MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, PathfindingMap& costs) const {
-        cout << "Values:" << endl;
-        values.print();
-        cout << "Costs:" << endl;
-        costs.print();
         int w = values.w;
         int h = values.h;
         vector<vector<double> > cost(w, vector<double>(h, numeric_limits<double>::infinity()));
@@ -127,8 +123,6 @@ struct Pathfinder {
                 }
             }
         }
-        cout << from.get_x() << " " << from.get_y() << endl;
-        cout << bestScore << " " << bestPosition.x << " " << bestPosition.y << endl;
         Position currentPos = bestPosition;
         if (currentPos.x == from.get_x() && currentPos.y == from.get_y()) {
             return MapLocation(from.get_planet(), currentPos.x, currentPos.y);
@@ -143,11 +137,6 @@ struct Pathfinder {
             currentPos = p;
         }
         reverse(path.begin(), path.end());
-        for (auto& pos : path) {
-            cout << "(" << pos.x << "," << pos.y << ") ";
-        }
-        cout << endl;
-        cout << currentPos.x << " " << currentPos.y << endl;
         return MapLocation(from.get_planet(), currentPos.x, currentPos.y);
     }
 };
