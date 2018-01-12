@@ -49,6 +49,9 @@ struct PathfindingMap {
     vector<vector<double> > weights;
     int w, h;
 
+    PathfindingMap() {
+    }
+
     PathfindingMap(int width, int height) {
         w = width;
         h = height;

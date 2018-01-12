@@ -21,6 +21,7 @@ vector<Unit> enemyUnits;
 vector<Unit> allUnits;
 Team ourTeam;
 Team enemyTeam;
+PathfindingMap karboniteMap;
 
 struct BotUnit {
     Unit unit;
@@ -36,11 +37,13 @@ struct State {
 struct MacroObject {
     double score;
     int cost;
+    int priority;
     function<void()> lambda;
 
-    MacroObject(double _score, int _cost, function<void()> _lambda) {
+    MacroObject(double _score, int _cost, int _priority, function<void()> _lambda) {
         score = _score;
         cost = _cost;
+        priority = _priority;
         lambda = _lambda;
     }
 
@@ -49,6 +52,9 @@ struct MacroObject {
     }
 
     bool operator<(const MacroObject& other) const {
+        if (priority != other.priority) {
+            return priority < other.priority;
+        }   
         return score < other.score;
     }
 };
@@ -62,11 +68,25 @@ struct BotWorker : BotUnit {
         if (!unit.get_location().is_on_map()) {
             return;
         }
-
+        
         const auto locus = unit.get_location().get_map_location();
         const auto nearby = gc.sense_nearby_units(locus, 2);
 
         auto unitMapLocation = unit.get_location().get_map_location();
+        
+        const unsigned id = unit.get_id();
+        
+        for (auto place : nearby) {
+            //Building 'em blueprints
+            if(gc.can_build(id, place.get_id())) {
+                const int& placeId = place.get_id();
+                macroObjects.emplace_back(1, 0, 1, [=]{
+                    if(gc.can_build(id, place.get_id())) {
+                        gc.build(id, placeId);
+                    }
+                });
+            }
+        }
 
         double bestHarvestScore = -1;
         Direction bestHarvestDirection;
@@ -83,24 +103,20 @@ struct BotWorker : BotUnit {
             }
         }
         if (bestHarvestScore > 0) {
-            gc.harvest(id, bestHarvestDirection);
+            const Direction& dir = bestHarvestDirection;
+            macroObjects.emplace_back(1, 0, 0, [=]{
+                if (gc.can_harvest(id, dir)) {
+                    gc.harvest(id, dir);
+                }
+            });
         }
 
-        for (auto place : nearby) {
-            //Building 'em blueprints
-            if(gc.can_build(id, place.get_id())) {
-                gc.build(id, place.get_id());
-                return;
-            }
-        }
-
-        const unsigned id = unit.get_id();
         for (int i = 0; i < 8; i++) {
             Direction d = (Direction) i;
             // Placing 'em blueprints
-            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)) {
+            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() >= unit_type_get_blueprint_cost(Factory)) {
                 double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 0;
-                macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), [=]{
+                macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
                     if(gc.can_blueprint(id, Factory, d)){
                         gc.blueprint(id, Factory, d);
                     }
@@ -108,8 +124,8 @@ struct BotWorker : BotUnit {
             }
 
             if(gc.can_replicate(id, d) && gc.get_karbonite() >= unit_type_get_replicate_cost()) {
-                double score = state.typeCount[Worker] < 10 ? (10 - state.typeCount[Factory]) : 0;
-                macroObjects.emplace_back(score, unit_type_get_replicate_cost(), [=]{
+                double score = state.typeCount[Worker] < 10 ? (10 - state.typeCount[Worker]) : 0;
+                macroObjects.emplace_back(score, unit_type_get_replicate_cost(), 2, [=]{
                     if(gc.can_replicate(id, d)) {
                         gc.replicate(id, d);
                     }
@@ -137,28 +153,20 @@ struct BotWorker : BotUnit {
             }
         }
 
-        PathfindingMap karboniteMap(w, h);
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                auto location = MapLocation(planet, i, j);
-                int karbonite = planetMap.get_initial_karbonite_at(location);
-                if (gc.can_sense_location(location)) {
-                    karbonite = gc.get_karbonite_at(location);
-                }
-                karboniteMap.weights[i][j] = karbonite;
-            }
-        }
-
         PathfindingMap damagedStructureMap(w, h);
         for (auto& unit : ourUnits) {
             if (unit.get_unit_type() == Factory) {
+                double remainingLife = unit.get_health() / (unit.get_max_health() + 0.0);
+                if (remainingLife = 1.0) {
+                    continue;
+                }
                 for (int i = 0; i < 8; i++) {
                     Direction d = (Direction) i;
                     auto location = unit.get_location().get_map_location().add(d);
                     int x = location.get_x();
                     int y = location.get_y();
                     if (x >= 0 && x < w && y >= 0 && y < h) {
-                        damagedStructureMap.weights[x][y] = 20;
+                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 15 * (2.0 - remainingLife));
                     }
                 }
             }
@@ -345,12 +353,11 @@ struct BotFactory : BotUnit {
             if (gc.can_unload(id, dir)){
                 gc.unload(id, dir);
                 unloaded = true;
-                cout << "Unloading a knight!" << endl;
             }
         }
         if (gc.can_produce_robot(id, Ranger)){
             double score = 0.5;
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), [=] {
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
                 gc.produce_robot(id, Ranger);
             });
         }
@@ -401,8 +408,31 @@ int main() {
     printf("Connected!\n");
     map<unsigned int, BotUnit*> unitMap;
 
+    auto& earthMap = gc.get_starting_planet(Earth);
+    int w = earthMap.get_width();
+    int h = earthMap.get_height();
+    karboniteMap = PathfindingMap(w, h);
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            auto location = MapLocation(Earth, i, j);
+            int karbonite = earthMap.get_initial_karbonite_at(location);
+            karboniteMap.weights[i][j] = karbonite;
+        }
+    }
+
     // loop through the whole game.
     while (true) {
+
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                auto location = MapLocation(Earth, i, j);
+                if (gc.can_sense_location(location)) {
+                    int karbonite = gc.get_karbonite_at(location);
+                    karboniteMap.weights[i][j] = min(karboniteMap.weights[i][j], (double) karbonite);
+                }
+            }
+        }
+
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
@@ -441,14 +471,21 @@ int main() {
             botUnit.tick();
         }
         sort(macroObjects.rbegin(), macroObjects.rend());
+        if (macroObjects.size() > 0) {
+            cout << "Best score: " << macroObjects[0].score << endl;
+        }
+        bool failedPaying = false;
         for (auto& macroObject : macroObjects) {
             if (macroObject.score <= 0) {
-                break;
+                continue;
+            }
+            if (failedPaying && macroObject.cost) {
+                continue;
             }
             if (gc.get_karbonite() >= macroObject.cost) {
                 macroObject.execute();
             } else {
-                break;
+                failedPaying = true;
             }
         }
 
