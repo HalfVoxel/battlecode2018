@@ -90,18 +90,26 @@ struct BotWorker : BotUnit {
         }
 
         const unsigned id = unit.get_id();
-        Direction d = (Direction) (rand() % 9);
-        // Placing 'em blueprints
-        if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
+        for (int i = 0; i < 8; i++) {
+            Direction d = (Direction) i;
+            // Placing 'em blueprints
+            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() >= unit_type_get_blueprint_cost(Factory)){
                 double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 0;
                 macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), this, d, Factory);
+            }
+
+            if(gc.can_replicate(id, d) && gc.get_karbonite() >= unit_type_get_replicate_cost()) {
+                double score = state.typeCount[Worker] < 10 ? (10 - state.typeCount[Factory]) : 0;
+                macroObjects.emplace_back(score, unit_type_get_replicate_cost(), this, d, Worker);
+            }
         }
+
+
 
         auto unitMapLocation = unit.get_location().get_map_location();
 
         double bestHarvestScore = -1;
         Direction bestHarvestDirection;
-        auto unitMapLocation = unit.get_location().get_map_location();
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();
@@ -333,11 +341,11 @@ int main() {
 
         macroObjects.clear();
         state = State();
-        for (auto& unit : units) {
+        for (auto& unit : ourUnits) {
             state.typeCount[unit.get_unit_type()]++;
         }
 
-        for (const auto unit : units) {
+        for (const auto unit : ourUnits) {
             const unsigned id = unit.get_id();
             BotUnit* botUnitPtr;
 
@@ -372,10 +380,18 @@ int main() {
                 auto unit = macroObject.unit;
                 if (unit->unit.get_unit_type() == Worker) {
                     auto d = macroObject.direction;
-                    if(gc.can_blueprint(unit->id, macroObject.unitType, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(macroObject.unitType)){
-                        cout << "We are building a factory!!" << endl;
-                        cout << "Score = " << macroObject.score << endl;
-                        gc.blueprint(unit->id, macroObject.unitType, d);
+                    if (macroObject.unitType == Worker) {
+                        if(gc.can_replicate(unit->id, d) && gc.get_karbonite() >= unit_type_get_replicate_cost()) {
+                            cout << "We are replicating!!" << endl;
+                            gc.replicate(unit->id, d);
+                        }
+                    }
+                    else {
+                        if(gc.can_blueprint(unit->id, macroObject.unitType, d) and gc.get_karbonite() >= unit_type_get_blueprint_cost(macroObject.unitType)){
+                            cout << "We are building a factory!!" << endl;
+                            cout << "Score = " << macroObject.score << endl;
+                            gc.blueprint(unit->id, macroObject.unitType, d);
+                        }
                     }
                 }
                 else { // Factory
