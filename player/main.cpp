@@ -23,8 +23,40 @@ struct BotUnit {
     virtual void tick() {}
 };
 
+struct State {
+    map<UnitType, int> typeCount;
+} state;
+
+struct MacroObject {
+    double score;
+    int cost;
+    BotUnit* unit;
+    Direction direction;
+    UnitType unitType;
+
+    MacroObject(double _score, int _cost, BotUnit* _unit, Direction _direction, UnitType _unitType) {
+        score = _score;
+        cost = _cost;
+        unit = _unit;
+        direction = _direction;
+        unitType = _unitType;
+    }
+
+    MacroObject(double _score, int _cost, BotUnit* _unit, UnitType _unitType) {
+        score = _score;
+        cost = _cost;
+        unit = _unit;
+        unitType = _unitType;
+    }
+
+    bool operator<(const MacroObject& other) const {
+        return score < other.score;
+    }
+};
+    
+vector<MacroObject> macroObjects;
+
 struct BotWorker : BotUnit {
-    bool still = false;
     BotWorker(const Unit unit) : BotUnit(unit) {}
     void tick() {
 
@@ -49,9 +81,8 @@ struct BotWorker : BotUnit {
         if (!anyBuilt) {
             // Placing 'em blueprints
             if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
-                cout << "We are building a factory!!" << endl;
-                gc.blueprint(id, Factory, d);
-                still = true;
+                double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 0;
+                macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), this, d, Factory);
             }
         }
 
@@ -165,11 +196,8 @@ struct BotFactory : BotUnit {
             }
         }
         if (gc.can_produce_robot(id, Knight)){
-            if (unloaded) {
-                cout << "UNLOADED AND PRODUCED!" << endl;
-            }
-            cout << "We are producing a Knight!!" << endl;
-            gc.produce_robot(id, Knight);
+            double score = 0.5;
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), this, Knight);
         }
     }
 };
@@ -221,6 +249,12 @@ int main() {
         allUnits.insert(allUnits.end(), units.begin(), units.end());
         allUnits.insert(allUnits.end(), enemyUnits.begin(), enemyUnits.end());
 
+        macroObjects.clear();
+        state = State();
+        for (auto& unit : units) {
+            state.typeCount[unit.get_unit_type()]++;
+        }
+
         for (const auto unit : units) {
             const unsigned id = unit.get_id();
             BotUnit* botUnitPtr;
@@ -246,6 +280,31 @@ int main() {
             BotUnit& botUnit = *botUnitPtr;
             botUnit.unit = unit;
             botUnit.tick();
+        }
+        sort(macroObjects.rbegin(), macroObjects.rend());
+        for (auto& macroObject : macroObjects) {
+            if (macroObject.score <= 0) {
+                break;
+            }
+            if (gc.get_karbonite() >= macroObject.cost) {
+                auto unit = macroObject.unit;
+                if (unit->unit.get_unit_type() == Worker) {
+                    auto d = macroObject.direction;
+                    if(gc.can_blueprint(unit->id, macroObject.unitType, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(macroObject.unitType)){
+                        cout << "We are building a factory!!" << endl;
+                        cout << "Score = " << macroObject.score << endl;
+                        gc.blueprint(unit->id, macroObject.unitType, d);
+                    }
+                }
+                else { // Factory
+                    if (gc.can_produce_robot(unit->id, macroObject.unitType)){
+                        gc.produce_robot(unit->id, macroObject.unitType);
+                    }
+                }
+            }
+            else {
+                break;
+            }
         }
 
         // this line helps the output logs make more sense by forcing output to be sent
