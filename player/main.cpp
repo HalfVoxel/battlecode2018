@@ -55,14 +55,25 @@ struct BotWorker : BotUnit {
             }
         }
 
+        auto unitMapLocation = unit.get_location().get_map_location();
+
+        double bestHarvestScore = -1;
+        Direction bestHarvestDirection;
         for (int i = 0; i < 9; ++i) {
             auto d = (Direction) i;
             if (gc.can_harvest(id, d)) {
-                gc.harvest(id, d);
-                break;
+                auto pos = unitMapLocation.add(d);
+                int karbonite = gc.get_karbonite_at(pos);
+                double score = karbonite;
+                if (score > bestHarvestScore) {
+                    bestHarvestScore = score;
+                    bestHarvestDirection = d;
+                }
             }
         }
-        auto unitMapLocation = unit.get_location().get_map_location();
+        if (bestHarvestScore > 0) {
+            gc.harvest(id, bestHarvestDirection);
+        }
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();
@@ -99,25 +110,11 @@ struct BotWorker : BotUnit {
         auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap, passableMap);
 
         if (nextLocation != unitMapLocation) {
-            cout << "Wanting to move from " << unitMapLocation.get_x() << " " << unitMapLocation.get_y() << endl;
-            cout << "Wanting to move to " << nextLocation.get_x() << " " << nextLocation.get_y() << endl;
-            cout << "Ready: " << gc.is_move_ready(id) << endl;
             auto d = unitMapLocation.direction_to(nextLocation);
-            if (!planetMap.is_passable_terrain_at(nextLocation)) {
-                cout << "Not passable" << endl;
-            }
-            if (!gc.is_occupiable(nextLocation)) {
-                cout << "Not occupiable" << endl;
-            }
-            cout << "d = " << d << endl;
-            cout << direction_dx(d) << " " << direction_dy(d) << endl;
             if (gc.is_move_ready(id) && gc.can_move(id,d)){
-            //if (gc.is_move_ready(id) && gc.is_occupiable(nextLocation)) {
-                cout << "Moving" << endl;
                 gc.move_robot(id,d);
             }
             else {
-                cout << "Not moving" << endl;
             }
         }
     }
