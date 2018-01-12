@@ -24,20 +24,37 @@ struct BotUnit {
 };
 
 struct BotWorker : BotUnit {
-    BotWorker(const Unit& unit) : BotUnit(unit) {}
+    bool still = false;
+    BotWorker(const Unit unit) : BotUnit(unit) {}
     void tick() {
-        
+
         if (!unit.get_location().is_on_map()) {
             return;
         }
 
+        const auto locus = unit.get_location().get_map_location();
+        const auto nearby = gc.sense_nearby_units(locus, 2);
+        bool anyBuilt = false;
+        for (auto place : nearby) {
+            //Building 'em blueprints
+            if(gc.can_build(id, place.get_id())) {
+                anyBuilt = true;
+                gc.build(id, place.get_id());
+                break;
+            }
+        }
+
         const unsigned id = unit.get_id();
         Direction d = (Direction) (rand() % 9);
-        // Placing 'em blueprints
-        if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
-            cout << "We are building a factory!!" << endl;
-            gc.blueprint(id, Factory, d);
+        if (!anyBuilt) {
+            // Placing 'em blueprints
+            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
+                cout << "We are building a factory!!" << endl;
+                gc.blueprint(id, Factory, d);
+                still = true;
+            }
         }
+
         for (int i = 0; i < 9; ++i) {
             auto d = (Direction) i;
             if (gc.can_harvest(id, d)) {
@@ -108,21 +125,16 @@ struct BotWorker : BotUnit {
 };
 
 struct BotKnight : BotUnit {
-    BotKnight(const Unit& unit) : BotUnit(unit) {}
+    BotKnight(const Unit unit) : BotUnit(unit) {}
     void tick() {
+        if (!unit.get_location().is_on_map()) return;
+
         // Calls on the controller take unit IDs for ownership reasons.
         const auto locus = unit.get_location().get_map_location();
         const auto nearby = gc.sense_nearby_units(locus, 2);
-        for ( auto place : nearby ){
-            //Building 'em blueprints
-            if(gc.can_build(id, place.get_id()) && unit.get_unit_type() == Worker){
-                gc.build(id, place.get_id());
-                continue;
-            }
+        for (auto place : nearby) {
             //Attacking 'em enemies
-            if( place.get_team() != unit.get_team() and
-                    gc.is_attack_ready(id) and
-                    gc.can_attack(id, place.get_id()) ){
+            if(place.get_team() != unit.get_team() && gc.is_attack_ready(id)){
                 gc.attack(id, place.get_id());
                 continue;
             }
@@ -131,49 +143,51 @@ struct BotKnight : BotUnit {
 };
 
 struct BotRanger : BotUnit {
-    BotRanger(const Unit& unit) : BotUnit(unit) {}
+    BotRanger(const Unit unit) : BotUnit(unit) {}
 };
 
 struct BotMage : BotUnit {
-    BotMage(const Unit& unit) : BotUnit(unit) {}
+    BotMage(const Unit unit) : BotUnit(unit) {}
 };
 
 struct BotHealer : BotUnit {
-    BotHealer(const Unit& unit) : BotUnit(unit) {}
+    BotHealer(const Unit unit) : BotUnit(unit) {}
 };
 
 struct BotFactory : BotUnit {
-    BotFactory(const Unit& unit) : BotUnit(unit) {}
+    BotFactory(const Unit unit) : BotUnit(unit) {}
 
     void tick() {
         auto garrison = unit.get_structure_garrison();
-
+        bool unloaded = false;
         if (garrison.size() > 0){
             Direction dir = (Direction) (rand() % 8);
             if (gc.can_unload(id, dir)){
                 gc.unload(id, dir);
-                return;
+                unloaded = true;
+                cout << "Unloading a knight!" << endl;
             }
-        } else if (gc.can_produce_robot(id, Knight)){
+        }
+        if (gc.can_produce_robot(id, Knight)){
+            if (unloaded) {
+                cout << "UNLOADED AND PRODUCED!" << endl;
+            }
             cout << "We are producing a Knight!!" << endl;
             gc.produce_robot(id, Knight);
-            return;
         }
     }
 };
 
 struct BotRocket : BotUnit {
-    BotRocket(const Unit& unit) : BotUnit(unit) {}
+    BotRocket(const Unit unit) : BotUnit(unit) {}
 };
 
-
-void workerLogic(const GameController& gc, const Unit& unit) {
-
-}
-
 int main() {
+    srand(time(0));
+
     printf("Player C++ bot starting\n");
     printf("Connecting to manager...\n");
+
     // std::default_random_engine generator;
     // std::uniform_int_distribution<int> distribution (0,8);
     // auto dice = std::bind ( distribution , generator );
