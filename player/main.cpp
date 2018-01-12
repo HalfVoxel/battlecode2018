@@ -36,30 +36,23 @@ struct State {
 struct MacroObject {
     double score;
     int cost;
-    BotUnit* unit;
-    Direction direction;
-    UnitType unitType;
+    function<void()> lambda;
 
-    MacroObject(double _score, int _cost, BotUnit* _unit, Direction _direction, UnitType _unitType) {
+    MacroObject(double _score, int _cost, function<void()> _lambda) {
         score = _score;
         cost = _cost;
-        unit = _unit;
-        direction = _direction;
-        unitType = _unitType;
+        lambda = _lambda;
     }
 
-    MacroObject(double _score, int _cost, BotUnit* _unit, UnitType _unitType) {
-        score = _score;
-        cost = _cost;
-        unit = _unit;
-        unitType = _unitType;
+    void execute() {
+        lambda();
     }
 
     bool operator<(const MacroObject& other) const {
         return score < other.score;
     }
 };
-    
+
 vector<MacroObject> macroObjects;
 
 struct BotWorker : BotUnit {
@@ -73,12 +66,24 @@ struct BotWorker : BotUnit {
         const auto locus = unit.get_location().get_map_location();
         const auto nearby = gc.sense_nearby_units(locus, 2);
 
+        auto unitMapLocation = unit.get_location().get_map_location();
+
+        double bestHarvestScore = -1;
+        Direction bestHarvestDirection;
         for (int i = 0; i < 9; ++i) {
             auto d = (Direction) i;
             if (gc.can_harvest(id, d)) {
-                gc.harvest(id, d);
-                break;
+                auto pos = unitMapLocation.add(d);
+                int karbonite = gc.get_karbonite_at(pos);
+                double score = karbonite;
+                if (score > bestHarvestScore) {
+                    bestHarvestScore = score;
+                    bestHarvestDirection = d;
+                }
             }
+        }
+        if (bestHarvestScore > 0) {
+            gc.harvest(id, bestHarvestDirection);
         }
 
         for (auto place : nearby) {
@@ -93,23 +98,25 @@ struct BotWorker : BotUnit {
         for (int i = 0; i < 8; i++) {
             Direction d = (Direction) i;
             // Placing 'em blueprints
-            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() >= unit_type_get_blueprint_cost(Factory)){
+            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)) {
                 double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 0;
-                macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), this, d, Factory);
+                macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), [=]{
+                    if(gc.can_blueprint(id, Factory, d)){
+                        gc.blueprint(id, Factory, d);
+                    }
+                });
             }
 
             if(gc.can_replicate(id, d) && gc.get_karbonite() >= unit_type_get_replicate_cost()) {
                 double score = state.typeCount[Worker] < 10 ? (10 - state.typeCount[Factory]) : 0;
-                macroObjects.emplace_back(score, unit_type_get_replicate_cost(), this, d, Worker);
+                macroObjects.emplace_back(score, unit_type_get_replicate_cost(), [=]{
+                    gc.replicate(id, d);
+                });
             }
         }
 
 
 
-        auto unitMapLocation = unit.get_location().get_map_location();
-
-        double bestHarvestScore = -1;
-        Direction bestHarvestDirection;
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();
@@ -164,8 +171,6 @@ struct BotWorker : BotUnit {
             auto d = unitMapLocation.direction_to(nextLocation);
             if (gc.is_move_ready(id) && gc.can_move(id,d)){
                 gc.move_robot(id,d);
-            }
-            else {
             }
         }
     }
@@ -298,7 +303,9 @@ struct BotFactory : BotUnit {
         }
         if (gc.can_produce_robot(id, Ranger)){
             double score = 0.5;
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), this, Ranger);
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), [=] {
+                gc.produce_robot(id, Ranger);
+            });
         }
     }
 };
@@ -392,30 +399,8 @@ int main() {
                 break;
             }
             if (gc.get_karbonite() >= macroObject.cost) {
-                auto unit = macroObject.unit;
-                if (unit->unit.get_unit_type() == Worker) {
-                    auto d = macroObject.direction;
-                    if (macroObject.unitType == Worker) {
-                        if(gc.can_replicate(unit->id, d) && gc.get_karbonite() >= unit_type_get_replicate_cost()) {
-                            cout << "We are replicating!!" << endl;
-                            gc.replicate(unit->id, d);
-                        }
-                    }
-                    else {
-                        if(gc.can_blueprint(unit->id, macroObject.unitType, d) and gc.get_karbonite() >= unit_type_get_blueprint_cost(macroObject.unitType)){
-                            cout << "We are building a factory!!" << endl;
-                            cout << "Score = " << macroObject.score << endl;
-                            gc.blueprint(unit->id, macroObject.unitType, d);
-                        }
-                    }
-                }
-                else { // Factory
-                    if (gc.can_produce_robot(unit->id, macroObject.unitType)){
-                        gc.produce_robot(unit->id, macroObject.unitType);
-                    }
-                }
-            }
-            else {
+                macroObject.execute();
+            } else {
                 break;
             }
         }
