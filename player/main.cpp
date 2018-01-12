@@ -117,8 +117,6 @@ struct BotWorker : BotUnit {
             }
         }
 
-
-
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();
@@ -178,16 +176,65 @@ struct BotWorker : BotUnit {
     }
 };
 
+// Relative values of different unit types when at "low" (not full) health
+float unit_defensive_strategic_value[] = {
+    1, // Worker
+    4, // Knight
+    5, // Ranger
+    4, // Mage
+    2, // Healer
+    2, // Factory
+    1, // Rocket
+};
+
+// Relative values of different unit types when at full or almost full health
+float unit_strategic_value[] = {
+    2, // Worker
+    1, // Knight
+    3, // Ranger
+    3, // Mage
+    2, // Healer
+    2, // Factory
+    2, // Rocket
+};
+
+static_assert((int)Worker == 0, "");
+static_assert((int)Rocket == 6, "");
+
 void attack_all_in_range(const Unit& unit) {
+    if (!gc.is_attack_ready(unit.get_id())) return;
+
     // Calls on the controller take unit IDs for ownership reasons.
     const auto locus = unit.get_location().get_map_location();
     const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
-    for (auto place : nearby) {
-        //Attacking 'em enemies
-        if(place.get_team() != unit.get_team() && gc.can_attack(unit.get_id(), place.get_id()) && gc.is_attack_ready(unit.get_id())){
-            gc.attack(unit.get_id(), place.get_id());
-            break;
+
+    const Unit* best_unit = nullptr;
+    float best_value = -1;
+    float totalWeight = 0;
+
+    auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
+    auto& values = low_health ? unit_defensive_strategic_value : unit_strategic_value;
+
+    for (auto& place : nearby) {
+        if (place.get_health() <= 0) continue;
+        if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
+        if (place.get_team() == unit.get_team()) continue;
+
+        float fractional_health = place.get_health() / (float)place.get_max_health();
+        float value = values[place.get_unit_type()] / fractional_health;
+        value *= value;
+
+        // Reservoir sampling
+        totalWeight += value;
+        if (((rand() % 100000)/100000.0f) * totalWeight <= value) {
+            best_unit = &place;
+            best_value = value;
         }
+    }
+
+    if (best_unit != nullptr) {
+        //Attacking 'em enemies
+        gc.attack(unit.get_id(), best_unit->get_id());
     }
 }
 
@@ -271,10 +318,8 @@ struct BotRanger : BotUnit {
 
         if (closest_unit != nullptr) {
             auto p = closest_unit->get_location().get_map_location();
-            cout << "Before movement " << unit.get_location().get_map_location().get_x() << " " << unit.get_location().get_map_location().get_y() << endl;
             move_with_pathfinding_to(unit, p);
             unit = gc.get_unit(unit.get_id());
-            cout << "After movement " << unit.get_location().get_map_location().get_x() << " " << unit.get_location().get_map_location().get_y() << endl;
         }
 
         attack_all_in_range(unit);
