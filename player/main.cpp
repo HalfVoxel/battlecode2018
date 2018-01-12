@@ -16,6 +16,12 @@ using namespace std;
 
 GameController gc;
 
+vector<Unit> ourUnits;
+vector<Unit> enemyUnits;
+vector<Unit> allUnits;
+Team ourTeam;
+Team enemyTeam;
+
 struct BotUnit {
     Unit unit;
     const unsigned id;
@@ -66,45 +72,36 @@ struct BotWorker : BotUnit {
 
         const auto locus = unit.get_location().get_map_location();
         const auto nearby = gc.sense_nearby_units(locus, 2);
-        bool anyBuilt = false;
+
+        for (int i = 0; i < 9; ++i) {
+            auto d = (Direction) i;
+            if (gc.can_harvest(id, d)) {
+                gc.harvest(id, d);
+                break;
+            }
+        }
+
         for (auto place : nearby) {
             //Building 'em blueprints
             if(gc.can_build(id, place.get_id())) {
-                anyBuilt = true;
                 gc.build(id, place.get_id());
-                break;
+                return;
             }
         }
 
         const unsigned id = unit.get_id();
         Direction d = (Direction) (rand() % 9);
-        if (!anyBuilt) {
-            // Placing 'em blueprints
-            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
+        // Placing 'em blueprints
+        if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
                 double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 0;
                 macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), this, d, Factory);
-            }
         }
 
         auto unitMapLocation = unit.get_location().get_map_location();
 
         double bestHarvestScore = -1;
         Direction bestHarvestDirection;
-        for (int i = 0; i < 9; ++i) {
-            auto d = (Direction) i;
-            if (gc.can_harvest(id, d)) {
-                auto pos = unitMapLocation.add(d);
-                int karbonite = gc.get_karbonite_at(pos);
-                double score = karbonite;
-                if (score > bestHarvestScore) {
-                    bestHarvestScore = score;
-                    bestHarvestDirection = d;
-                }
-            }
-        }
-        if (bestHarvestScore > 0) {
-            gc.harvest(id, bestHarvestDirection);
-        }
+        auto unitMapLocation = unit.get_location().get_map_location();
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();
@@ -151,26 +148,107 @@ struct BotWorker : BotUnit {
     }
 };
 
+void attack_all_in_range(const Unit& unit) {
+    // Calls on the controller take unit IDs for ownership reasons.
+    const auto locus = unit.get_location().get_map_location();
+    const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
+    for (auto place : nearby) {
+        //Attacking 'em enemies
+        if(place.get_team() != unit.get_team() && gc.can_attack(unit.get_id(), place.get_id()) && gc.is_attack_ready(unit.get_id())){
+            gc.attack(unit.get_id(), place.get_id());
+            break;
+        }
+    }
+}
+
 struct BotKnight : BotUnit {
     BotKnight(const Unit unit) : BotUnit(unit) {}
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
         // Calls on the controller take unit IDs for ownership reasons.
-        const auto locus = unit.get_location().get_map_location();
-        const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
-        for (auto place : nearby) {
-            //Attacking 'em enemies
-            if(place.get_team() != unit.get_team() && gc.is_attack_ready(id)){
-                gc.attack(id, place.get_id());
-                continue;
-            }
-        }
+        attack_all_in_range(unit);
     }
 };
 
+void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
+    auto unitMapLocation = unit.get_location().get_map_location();
+    auto planet = unitMapLocation.get_planet();
+    auto& planetMap = gc.get_starting_planet(planet);
+    int w = planetMap.get_width();
+    int h = planetMap.get_height();
+    PathfindingMap passableMap(w, h);
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            auto location = MapLocation(planet, i, j);
+            if (planetMap.is_passable_terrain_at(location)) {
+                passableMap.weights[i][j] = 1.0;
+                if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
+                    passableMap.weights[i][j] = 1000.0;
+                }
+            } else {
+                passableMap.weights[i][j] = numeric_limits<double>::infinity();
+            }
+        }
+    }
+
+    auto id = unit.get_id();
+
+    PathfindingMap rewardMap(w, h);
+    rewardMap.weights[target.get_x()][target.get_y()] = 1;
+
+    Pathfinder pathfinder;
+    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, passableMap);
+
+    if (nextLocation != unitMapLocation) {
+        auto d = unitMapLocation.direction_to(nextLocation);
+        if (gc.is_move_ready(id) && gc.can_move(id,d)){
+            gc.move_robot(id,d);
+        }
+    }
+}
+
 struct BotRanger : BotUnit {
     BotRanger(const Unit unit) : BotUnit(unit) {}
+
+    void tick() {
+        if (!unit.get_location().is_on_map()) return;
+
+        Unit* closest_unit = nullptr;
+        float closest_dist = 100000;
+
+        for (auto& enemy : enemyUnits) {
+            if (enemy.get_location().is_on_map()) {
+                auto pos = enemy.get_location().get_map_location();
+                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
+                if (dist < closest_dist) {
+                    closest_unit = &enemy;
+                    closest_dist = dist;
+                }
+            }
+        }
+
+        for (auto enemy : gc.get_starting_planet((Planet)0).get_initial_units()) {
+            if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
+                auto pos = enemy.get_location().get_map_location();
+                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
+                if (dist < closest_dist) {
+                    closest_unit = &enemy;
+                    closest_dist = dist;
+                }
+            }
+        }
+
+        if (closest_unit != nullptr) {
+            auto p = closest_unit->get_location().get_map_location();
+            cout << "Before movement " << unit.get_location().get_map_location().get_x() << " " << unit.get_location().get_map_location().get_y() << endl;
+            move_with_pathfinding_to(unit, p);
+            unit = gc.get_unit(unit.get_id());
+            cout << "After movement " << unit.get_location().get_map_location().get_x() << " " << unit.get_location().get_map_location().get_y() << endl;
+        }
+
+        attack_all_in_range(unit);
+    }
 };
 
 struct BotMage : BotUnit {
@@ -195,9 +273,9 @@ struct BotFactory : BotUnit {
                 cout << "Unloading a knight!" << endl;
             }
         }
-        if (gc.can_produce_robot(id, Knight)){
+        if (gc.can_produce_robot(id, Ranger)){
             double score = 0.5;
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), this, Knight);
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), this, Ranger);
         }
     }
 };
@@ -205,6 +283,24 @@ struct BotFactory : BotUnit {
 struct BotRocket : BotUnit {
     BotRocket(const Unit unit) : BotUnit(unit) {}
 };
+
+void find_units() {
+    ourUnits = gc.get_my_units();
+    auto planet = gc.get_planet();
+    ourTeam = gc.get_team();
+    enemyTeam = (Team)(1 - (int)gc.get_team());
+
+    allUnits = vector<Unit>();
+    enemyUnits = vector<Unit>();
+    for (int team = 0; team < 2; team++) {
+        if (team != ourTeam) {
+            auto u = gc.sense_nearby_units_by_team(MapLocation(planet, 0, 0), 1000000, (Team)team);
+            enemyUnits.insert(enemyUnits.end(), u.begin(), u.end());
+        }
+    }
+    allUnits.insert(allUnits.end(), ourUnits.begin(), ourUnits.end());
+    allUnits.insert(allUnits.end(), enemyUnits.begin(), enemyUnits.end());
+}
 
 int main() {
     srand(time(0));
@@ -233,21 +329,7 @@ int main() {
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
-        auto units = gc.get_my_units();
-        auto planet = gc.get_planet();
-        auto allies = gc.get_team();
-        auto opponents = (Team)(1 - (int)gc.get_team());
-
-        vector<Unit> allUnits;
-        vector<Unit> enemyUnits;
-        for (int team = 0; team < 2; team++) {
-            if (team != allies) {
-                auto u = gc.sense_nearby_units_by_team(MapLocation(planet, 0, 0), 1000000, (Team)team);
-                enemyUnits.insert(enemyUnits.end(), u.begin(), u.end());
-            }
-        }
-        allUnits.insert(allUnits.end(), units.begin(), units.end());
-        allUnits.insert(allUnits.end(), enemyUnits.begin(), enemyUnits.end());
+        find_units();
 
         macroObjects.clear();
         state = State();
