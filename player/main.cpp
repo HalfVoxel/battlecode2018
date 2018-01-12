@@ -9,6 +9,7 @@
 #include <map>
 
 #include "bc.hpp"
+#include "pathfinding.hpp"
 
 using namespace bc;
 using namespace std;
@@ -25,20 +26,82 @@ struct BotUnit {
 struct BotWorker : BotUnit {
     BotWorker(const Unit& unit) : BotUnit(unit) {}
     void tick() {
+        
+        if (!unit.get_location().is_on_map()) {
+            return;
+        }
+
         const unsigned id = unit.get_id();
         Direction d = (Direction) (rand() % 9);
         // Placing 'em blueprints
         if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
             cout << "We are building a factory!!" << endl;
             gc.blueprint(id, Factory, d);
-        } else if (gc.is_move_ready(id) && gc.can_move(id,d)){ // Moving otherwise (if possible)
-            gc.move_robot(id,d);
         }
         for (int i = 0; i < 9; ++i) {
             auto d = (Direction) i;
             if (gc.can_harvest(id, d)) {
                 gc.harvest(id, d);
                 break;
+            }
+        }
+        auto unitMapLocation = unit.get_location().get_map_location();
+        cout << unitMapLocation.get_x() << " " << unitMapLocation.get_y() << endl;
+        auto planet = unitMapLocation.get_planet();
+        auto& planetMap = gc.get_starting_planet(planet);
+        int w = planetMap.get_width();
+        int h = planetMap.get_height();
+        PathfindingMap passableMap(w, h);
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                auto location = MapLocation(planet, i, j);
+                if (planetMap.is_passable_terrain_at(location)) {
+                    passableMap.weights[i][j] = 1.0;
+                    if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
+                        passableMap.weights[i][j] = 1000.0;
+                    }
+                }
+                else {
+                    passableMap.weights[i][j] = numeric_limits<double>::infinity();
+                }
+            }
+        }
+
+        PathfindingMap karboniteMap(w, h);
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                auto location = MapLocation(planet, i, j);
+                int karbonite = planetMap.get_initial_karbonite_at(location);
+                if (gc.can_sense_location(location)) {
+                    karbonite = gc.get_karbonite_at(location);
+                }
+                karboniteMap.weights[i][j] = karbonite;
+            }
+        }
+
+        Pathfinder pathfinder;
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap, passableMap);
+
+        if (nextLocation != unitMapLocation) {
+            cout << "Wanting to move from " << unitMapLocation.get_x() << " " << unitMapLocation.get_y() << endl;
+            cout << "Wanting to move to " << nextLocation.get_x() << " " << nextLocation.get_y() << endl;
+            cout << "Ready: " << gc.is_move_ready(id) << endl;
+            auto d = unitMapLocation.direction_to(nextLocation);
+            if (!planetMap.is_passable_terrain_at(nextLocation)) {
+                cout << "Not passable" << endl;
+            }
+            if (!gc.is_occupiable(nextLocation)) {
+                cout << "Not occupiable" << endl;
+            }
+            cout << "d = " << d << endl;
+            cout << direction_dx(d) << " " << direction_dy(d) << endl;
+            if (gc.is_move_ready(id) && gc.can_move(id,d)){
+            //if (gc.is_move_ready(id) && gc.is_occupiable(nextLocation)) {
+                cout << "Moving" << endl;
+                gc.move_robot(id,d);
+            }
+            else {
+                cout << "Not moving" << endl;
             }
         }
     }
