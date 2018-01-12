@@ -26,7 +26,7 @@ PathfindingMap karboniteMap;
 struct BotUnit {
     Unit unit;
     const unsigned id;
-    BotUnit(const Unit unit) : unit(unit), id(unit.get_id()) {}
+    BotUnit(const Unit& unit) : unit(unit), id(unit.get_id()) {}
     virtual void tick() {}
 };
 
@@ -71,7 +71,7 @@ bool isOnMap(MapLocation location) {
 }
 
 struct BotWorker : BotUnit {
-    BotWorker(const Unit unit) : BotUnit(unit) {}
+    BotWorker(const Unit& unit) : BotUnit(unit) {}
     void tick() {
 
         if (!unit.get_location().is_on_map()) {
@@ -258,7 +258,7 @@ void attack_all_in_range(const Unit& unit) {
 }
 
 struct BotKnight : BotUnit {
-    BotKnight(const Unit unit) : BotUnit(unit) {}
+    BotKnight(const Unit& unit) : BotUnit(unit) {}
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
@@ -306,7 +306,7 @@ void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
 }
 
 struct BotRanger : BotUnit {
-    BotRanger(const Unit unit) : BotUnit(unit) {}
+    BotRanger(const Unit& unit) : BotUnit(unit) {}
 
     void tick() {
         if (!unit.get_location().is_on_map()) return;
@@ -348,15 +348,15 @@ struct BotRanger : BotUnit {
 };
 
 struct BotMage : BotUnit {
-    BotMage(const Unit unit) : BotUnit(unit) {}
+    BotMage(const Unit& unit) : BotUnit(unit) {}
 };
 
 struct BotHealer : BotUnit {
-    BotHealer(const Unit unit) : BotUnit(unit) {}
+    BotHealer(const Unit& unit) : BotUnit(unit) {}
 };
 
 struct BotFactory : BotUnit {
-    BotFactory(const Unit unit) : BotUnit(unit) {}
+    BotFactory(const Unit& unit) : BotUnit(unit) {}
 
     void tick() {
         auto garrison = unit.get_structure_garrison();
@@ -376,7 +376,7 @@ struct BotFactory : BotUnit {
 };
 
 struct BotRocket : BotUnit {
-    BotRocket(const Unit unit) : BotUnit(unit) {}
+    BotRocket(const Unit& unit) : BotUnit(unit) {}
 };
 
 void find_units() {
