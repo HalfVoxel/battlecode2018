@@ -22,6 +22,7 @@ vector<Unit> allUnits;
 Team ourTeam;
 Team enemyTeam;
 PathfindingMap karboniteMap;
+map<Planet, PathfindingMap> planetPassableMap;
 
 
 // Relative values of different unit types when at "low" (not full) health
@@ -95,26 +96,12 @@ void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
     auto& planetMap = gc.get_starting_planet(planet);
     int w = planetMap.get_width();
     int h = planetMap.get_height();
-    PathfindingMap passableMap(w, h);
-    for (int i = 0; i < w; i++) {
-        for (int j = 0; j < h; j++) {
-            auto location = MapLocation(planet, i, j);
-            if (planetMap.is_passable_terrain_at(location)) {
-                passableMap.weights[i][j] = 1.0;
-                if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
-                    passableMap.weights[i][j] = 1000.0;
-                }
-            } else {
-                passableMap.weights[i][j] = numeric_limits<double>::infinity();
-            }
-        }
-    }
 
     PathfindingMap rewardMap(w, h);
     rewardMap.weights[target.get_x()][target.get_y()] = 1;
 
     Pathfinder pathfinder;
-    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, passableMap);
+    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, planetPassableMap[planet]);
 
     if (nextLocation != unitMapLocation) {
         auto d = unitMapLocation.direction_to(nextLocation);
@@ -285,21 +272,6 @@ struct BotWorker : BotUnit {
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();
         int h = planetMap.get_height();
-        PathfindingMap passableMap(w, h);
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                auto location = MapLocation(planet, i, j);
-                if (planetMap.is_passable_terrain_at(location)) {
-                    passableMap.weights[i][j] = 1.0;
-                    if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
-                        passableMap.weights[i][j] = 1000.0;
-                    }
-                }
-                else {
-                    passableMap.weights[i][j] = numeric_limits<double>::infinity();
-                }
-            }
-        }
 
         PathfindingMap damagedStructureMap(w, h);
         for (auto& unit : ourUnits) {
@@ -321,7 +293,7 @@ struct BotWorker : BotUnit {
         }
 
         Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, passableMap);
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet]);
 
         if (nextLocation != unitMapLocation) {
             auto d = unitMapLocation.direction_to(nextLocation);
@@ -363,11 +335,71 @@ struct BotMage : BotUnit {
 
 struct BotHealer : BotUnit {
     BotHealer(const Unit& unit) : BotUnit(unit) {}
-
+    
     void tick() {
         if (!unit.get_location().is_on_map()) return;
+        
+        cout << "Executing healer" << endl;
 
-        default_military_behaviour();
+        auto unitMapLocation = unit.get_location().get_map_location();
+        auto planet = unitMapLocation.get_planet();
+        auto& planetMap = gc.get_starting_planet(planet);
+        int w = planetMap.get_width();
+        int h = planetMap.get_height();
+        PathfindingMap damagedRobotMap(w, h);
+        for (auto& u : ourUnits) {
+            if (is_robot(u.get_unit_type())) {
+                cout << "Found robot" << endl;
+                if (u.get_id() == id) {
+                    continue;
+                }
+                cout << "With id" << endl;
+                double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
+                if (remainingLife == 1.0) {
+                    continue;
+                }
+                cout << "It's hurt" << endl;
+                for (int i = 0; i < 8; i++) {
+                    Direction d = (Direction) i;
+                    auto location = u.get_location().get_map_location().add(d);
+                    int x = location.get_x();
+                    int y = location.get_y();
+                    if (x >= 0 && x < w && y >= 0 && y < h) {
+                        damagedRobotMap.weights[x][y] = max(damagedRobotMap.weights[x][y], 15 * (2.0 - remainingLife));
+                    }
+                }
+
+                auto distance = u.get_location().get_map_location().distance_squared_to(unitMapLocation);
+                cout << "distance: " << distance << endl;
+                cout << "heat: " << unit.get_attack_heat() << endl;
+                cout << "attack range: " << unit.get_attack_range() << endl;
+                if (gc.can_heal(id, u.get_id())) {
+                    cout << "Healing" << endl;
+                    gc.heal(id, u.get_id());
+                }
+            }
+        }
+        Pathfinder pathfinder;
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, damagedRobotMap, planetPassableMap[planet]);
+
+        if (nextLocation != unitMapLocation) {
+            auto d = unitMapLocation.direction_to(nextLocation);
+            if (gc.is_move_ready(id) && gc.can_move(id,d)){
+                gc.move_robot(id,d);
+            }
+        }
+        for (auto& u : ourUnits) {
+            if (is_robot(u.get_unit_type())) {
+                double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
+                if (remainingLife == 1.0) {
+                    continue;
+                }
+                if (gc.can_heal(id, u.get_id())) {
+                    cout << "Healing" << endl;
+                    gc.heal(id, u.get_id());
+                }
+            }
+        }
     }
 };
 
@@ -385,7 +417,17 @@ struct BotFactory : BotUnit {
         if (gc.can_produce_robot(id, Ranger)){
             double score = 2;
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
-                gc.produce_robot(id, Ranger);
+                if (gc.can_produce_robot(id, Ranger)) {
+                    gc.produce_robot(id, Ranger);
+                }
+            });
+        }
+        if (gc.can_produce_robot(id, Healer)){
+            double score = 20.0 / (1.0 + state.typeCount[Healer]);
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
+                if (gc.can_produce_robot(id, Healer)) {
+                    gc.produce_robot(id, Healer);
+                }
             });
         }
     }
@@ -474,6 +516,29 @@ int main() {
             state.typeCount[unit.get_unit_type()]++;
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
+        
+        Planet planets[] = { Earth, Mars };
+        for (int p = 0; p < 2; ++p) {
+            auto& planetMap = gc.get_starting_planet(planets[p]);
+            int w = planetMap.get_width();
+            int h = planetMap.get_height();
+            PathfindingMap passableMap(w, h);
+            for (int i = 0; i < w; i++) {
+                for (int j = 0; j < h; j++) {
+                    auto location = MapLocation(planets[p], i, j);
+                    if (planetMap.is_passable_terrain_at(location)) {
+                        passableMap.weights[i][j] = 1.0;
+                        if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
+                            passableMap.weights[i][j] = 1000.0;
+                        }
+                    }
+                    else {
+                        passableMap.weights[i][j] = numeric_limits<double>::infinity();
+                    }
+                }
+            }
+            planetPassableMap[planets[p]] = passableMap;
+        }
 
         for (const auto unit : ourUnits) {
             const unsigned id = unit.get_id();
