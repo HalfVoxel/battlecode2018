@@ -339,8 +339,6 @@ struct BotHealer : BotUnit {
     void tick() {
         if (!unit.get_location().is_on_map()) return;
         
-        cout << "Executing healer" << endl;
-
         auto unitMapLocation = unit.get_location().get_map_location();
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
@@ -349,16 +347,13 @@ struct BotHealer : BotUnit {
         PathfindingMap damagedRobotMap(w, h);
         for (auto& u : ourUnits) {
             if (is_robot(u.get_unit_type())) {
-                cout << "Found robot" << endl;
                 if (u.get_id() == id) {
                     continue;
                 }
-                cout << "With id" << endl;
                 double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
                 if (remainingLife == 1.0) {
                     continue;
                 }
-                cout << "It's hurt" << endl;
                 for (int i = 0; i < 8; i++) {
                     Direction d = (Direction) i;
                     auto location = u.get_location().get_map_location().add(d);
@@ -370,11 +365,7 @@ struct BotHealer : BotUnit {
                 }
 
                 auto distance = u.get_location().get_map_location().distance_squared_to(unitMapLocation);
-                cout << "distance: " << distance << endl;
-                cout << "heat: " << unit.get_attack_heat() << endl;
-                cout << "attack range: " << unit.get_attack_range() << endl;
-                if (gc.can_heal(id, u.get_id())) {
-                    cout << "Healing" << endl;
+                if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
                     gc.heal(id, u.get_id());
                 }
             }
@@ -394,8 +385,7 @@ struct BotHealer : BotUnit {
                 if (remainingLife == 1.0) {
                     continue;
                 }
-                if (gc.can_heal(id, u.get_id())) {
-                    cout << "Healing" << endl;
+                if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
                     gc.heal(id, u.get_id());
                 }
             }
