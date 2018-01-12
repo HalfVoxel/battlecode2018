@@ -157,7 +157,7 @@ struct BotWorker : BotUnit {
         for (auto& unit : ourUnits) {
             if (unit.get_unit_type() == Factory) {
                 double remainingLife = unit.get_health() / (unit.get_max_health() + 0.0);
-                if (remainingLife = 1.0) {
+                if (remainingLife == 1.0) {
                     continue;
                 }
                 for (int i = 0; i < 8; i++) {
