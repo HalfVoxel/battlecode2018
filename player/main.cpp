@@ -142,8 +142,23 @@ struct BotWorker : BotUnit {
             }
         }
 
+        PathfindingMap damagedStructureMap(w, h);
+        for (auto& unit : ourUnits) {
+            if (unit.get_unit_type() == Factory) {
+                for (int i = 0; i < 8; i++) {
+                    Direction d = (Direction) i;
+                    auto location = unit.get_location().get_map_location().add(d);
+                    int x = location.get_x();
+                    int y = location.get_y();
+                    if (x >= 0 && x < w && y >= 0 && y < h) {
+                        damagedStructureMap.weights[x][y] = 20;
+                    }
+                }
+            }
+        }
+
         Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap, passableMap);
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, passableMap);
 
         if (nextLocation != unitMapLocation) {
             auto d = unitMapLocation.direction_to(nextLocation);
