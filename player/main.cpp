@@ -12,6 +12,24 @@
 using namespace bc;
 using namespace std;
 
+void workerLogic(const GameController& gc, const Unit& unit) {
+    const unsigned id = unit.get_id();
+    Direction d = (Direction) (rand() % 9);
+    // Placing 'em blueprints
+    if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
+        cout << "We are building a factory!!" << endl;
+        gc.blueprint(id, Factory, d);
+    } else if (gc.is_move_ready(id) && gc.can_move(id,d)){ // Moving otherwise (if possible)
+        gc.move_robot(id,d);
+    }
+    for (int i = 0; i < 9; ++i) {
+        auto d = (Direction) i;
+        if (gc.can_harvest(id, d)) {
+            gc.harvest(id, d);
+            break;
+        }
+    }
+}
 
 int main() {
     printf("Player C++ bot starting\n");
@@ -78,13 +96,8 @@ int main() {
                 }
             }
 
-            Direction d = (Direction) dice();
-            // Placing 'em blueprints
-            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
-                cout << "We are building a factory!!" << endl;
-                gc.blueprint(id, Factory, d);
-            } else if (gc.is_move_ready(id) && gc.can_move(id,d)){ // Moving otherwise (if possible)
-                gc.move_robot(id,d);
+            if (unit.get_unit_type() == Worker) {
+                workerLogic(gc, unit);
             }
         }
         // this line helps the output logs make more sense by forcing output to be sent
