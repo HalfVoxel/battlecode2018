@@ -50,6 +50,7 @@ int main() {
             continue;
           }
         } else if (gc.can_produce_robot(id, Knight)){
+          cout << "We are producing a factory!!" << endl;
           gc.produce_robot(id, Knight);
           continue;
         }
@@ -78,6 +79,7 @@ int main() {
       Direction d = (Direction) dice();
       // Placing 'em blueprints
       if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() > unit_type_get_blueprint_cost(Factory)){
+        cout << "We are building a factory!!" << endl;
         gc.blueprint(id, Factory, d);
       } else if (gc.is_move_ready(id) && gc.can_move(id,d)){ // Moving otherwise (if possible)
         gc.move_robot(id,d);
