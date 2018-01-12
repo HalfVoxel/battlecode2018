@@ -110,7 +110,9 @@ struct BotWorker : BotUnit {
             if(gc.can_replicate(id, d) && gc.get_karbonite() >= unit_type_get_replicate_cost()) {
                 double score = state.typeCount[Worker] < 10 ? (10 - state.typeCount[Factory]) : 0;
                 macroObjects.emplace_back(score, unit_type_get_replicate_cost(), [=]{
-                    gc.replicate(id, d);
+                    if(gc.can_replicate(id, d)) {
+                        gc.replicate(id, d);
+                    }
                 });
             }
         }
