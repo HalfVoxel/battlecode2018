@@ -5,10 +5,12 @@
 #include <assert.h>
 #include <random>
 #include <functional>
+#include <iostream>
 
 #include "bc.hpp"
 
 using namespace bc;
+using namespace std;
 
 
 int main() {
@@ -50,7 +52,7 @@ int main() {
                         continue;
                     }
                 } else if (gc.can_produce_robot(id, Knight)){
-                    cout << "We are producing a factory!!" << endl;
+                    cout << "We are producing a Knight!!" << endl;
                     gc.produce_robot(id, Knight);
                     continue;
                 }
