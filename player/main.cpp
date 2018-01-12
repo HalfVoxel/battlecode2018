@@ -55,8 +55,22 @@ int main() {
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
-
         auto units = gc.get_my_units();
+        auto planet = gc.get_planet();
+        auto allies = gc.get_team();
+        auto opponents = (Team)(1 - (int)gc.get_team());
+
+        vector<Unit> allUnits;
+        vector<Unit> enemyUnits;
+        for (int team = 0; team < 2; team++) {
+            if (team != allies) {
+                auto u = gc.sense_nearby_units_by_team(MapLocation(planet, 0, 0), 1000000, (Team)team);
+                enemyUnits.insert(enemyUnits.end(), u.begin(), u.end());
+            }
+        }
+        allUnits.insert(allUnits.end(), units.begin(), units.end());
+        allUnits.insert(allUnits.end(), enemyUnits.begin(), enemyUnits.end());
+
         for (const auto unit : units) {
             const unsigned id = unit.get_id();
 
