@@ -18,7 +18,7 @@ GameController gc;
 struct BotUnit {
     Unit unit;
     const unsigned id;
-    BotUnit(const Unit& unit) : unit(unit), id(unit.get_id()) {}
+    BotUnit(const Unit unit) : unit(unit), id(unit.get_id()) {}
     virtual void tick() {}
 };
 
@@ -171,6 +171,7 @@ int main() {
             }
 
             BotUnit& botUnit = *botUnitPtr;
+            botUnit.unit = unit;
             botUnit.tick();
         }
 
