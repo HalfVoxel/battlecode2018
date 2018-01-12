@@ -23,11 +23,148 @@ Team ourTeam;
 Team enemyTeam;
 PathfindingMap karboniteMap;
 
+
+// Relative values of different unit types when at "low" (not full) health
+float unit_defensive_strategic_value[] = {
+    1, // Worker
+    4, // Knight
+    5, // Ranger
+    4, // Mage
+    2, // Healer
+    2, // Factory
+    1, // Rocket
+};
+
+// Relative values of different unit types when at full or almost full health
+float unit_strategic_value[] = {
+    2, // Worker
+    1, // Knight
+    3, // Ranger
+    3, // Mage
+    2, // Healer
+    2, // Factory
+    2, // Rocket
+};
+
+static_assert((int)Worker == 0, "");
+static_assert((int)Rocket == 6, "");
+
+void attack_all_in_range(const Unit& unit) {
+    if (!gc.is_attack_ready(unit.get_id())) return;
+
+    // Calls on the controller take unit IDs for ownership reasons.
+    const auto locus = unit.get_location().get_map_location();
+    const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
+
+    const Unit* best_unit = nullptr;
+    float best_value = -1;
+    float totalWeight = 0;
+
+    auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
+    auto& values = low_health ? unit_defensive_strategic_value : unit_strategic_value;
+
+    for (auto& place : nearby) {
+        if (place.get_health() <= 0) continue;
+        if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
+        if (place.get_team() == unit.get_team()) continue;
+
+        float fractional_health = place.get_health() / (float)place.get_max_health();
+        float value = values[place.get_unit_type()] / fractional_health;
+        value *= value;
+
+        // Reservoir sampling
+        totalWeight += value;
+        if (((rand() % 100000)/100000.0f) * totalWeight <= value) {
+            best_unit = &place;
+            best_value = value;
+        }
+    }
+
+    if (best_unit != nullptr) {
+        //Attacking 'em enemies
+        gc.attack(unit.get_id(), best_unit->get_id());
+    }
+}
+
+void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
+    auto id = unit.get_id();
+    if (!gc.is_move_ready(id)) return;
+
+    auto unitMapLocation = unit.get_location().get_map_location();
+    auto planet = unitMapLocation.get_planet();
+    auto& planetMap = gc.get_starting_planet(planet);
+    int w = planetMap.get_width();
+    int h = planetMap.get_height();
+    PathfindingMap passableMap(w, h);
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            auto location = MapLocation(planet, i, j);
+            if (planetMap.is_passable_terrain_at(location)) {
+                passableMap.weights[i][j] = 1.0;
+                if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
+                    passableMap.weights[i][j] = 1000.0;
+                }
+            } else {
+                passableMap.weights[i][j] = numeric_limits<double>::infinity();
+            }
+        }
+    }
+
+    PathfindingMap rewardMap(w, h);
+    rewardMap.weights[target.get_x()][target.get_y()] = 1;
+
+    Pathfinder pathfinder;
+    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, passableMap);
+
+    if (nextLocation != unitMapLocation) {
+        auto d = unitMapLocation.direction_to(nextLocation);
+        if (gc.can_move(id,d)){
+            gc.move_robot(id,d);
+        }
+    }
+}
+
 struct BotUnit {
     Unit unit;
     const unsigned id;
     BotUnit(const Unit& unit) : unit(unit), id(unit.get_id()) {}
     virtual void tick() {}
+
+    void default_military_behaviour() {
+        Unit* closest_unit = nullptr;
+        float closest_dist = 100000;
+
+        for (auto& enemy : enemyUnits) {
+            if (enemy.get_location().is_on_map()) {
+                auto pos = enemy.get_location().get_map_location();
+                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
+                if (dist < closest_dist) {
+                    closest_unit = &enemy;
+                    closest_dist = dist;
+                }
+            }
+        }
+
+        auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
+        for (auto& enemy : initial_units) {
+            if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
+                auto pos = enemy.get_location().get_map_location();
+                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
+                if (dist < closest_dist) {
+                    closest_unit = &enemy;
+                    closest_dist = dist;
+                }
+            }
+        }
+
+        if (closest_unit != nullptr) {
+            auto p = closest_unit->get_location().get_map_location();
+            move_with_pathfinding_to(unit, p);
+            unit = gc.get_unit(unit.get_id());
+        }
+
+        attack_all_in_range(unit);
+    }
 };
 
 struct State {
@@ -195,115 +332,14 @@ struct BotWorker : BotUnit {
     }
 };
 
-// Relative values of different unit types when at "low" (not full) health
-float unit_defensive_strategic_value[] = {
-    1, // Worker
-    4, // Knight
-    5, // Ranger
-    4, // Mage
-    2, // Healer
-    2, // Factory
-    1, // Rocket
-};
-
-// Relative values of different unit types when at full or almost full health
-float unit_strategic_value[] = {
-    2, // Worker
-    1, // Knight
-    3, // Ranger
-    3, // Mage
-    2, // Healer
-    2, // Factory
-    2, // Rocket
-};
-
-static_assert((int)Worker == 0, "");
-static_assert((int)Rocket == 6, "");
-
-void attack_all_in_range(const Unit& unit) {
-    if (!gc.is_attack_ready(unit.get_id())) return;
-
-    // Calls on the controller take unit IDs for ownership reasons.
-    const auto locus = unit.get_location().get_map_location();
-    const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
-
-    const Unit* best_unit = nullptr;
-    float best_value = -1;
-    float totalWeight = 0;
-
-    auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
-    auto& values = low_health ? unit_defensive_strategic_value : unit_strategic_value;
-
-    for (auto& place : nearby) {
-        if (place.get_health() <= 0) continue;
-        if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
-        if (place.get_team() == unit.get_team()) continue;
-
-        float fractional_health = place.get_health() / (float)place.get_max_health();
-        float value = values[place.get_unit_type()] / fractional_health;
-        value *= value;
-
-        // Reservoir sampling
-        totalWeight += value;
-        if (((rand() % 100000)/100000.0f) * totalWeight <= value) {
-            best_unit = &place;
-            best_value = value;
-        }
-    }
-
-    if (best_unit != nullptr) {
-        //Attacking 'em enemies
-        gc.attack(unit.get_id(), best_unit->get_id());
-    }
-}
-
 struct BotKnight : BotUnit {
     BotKnight(const Unit& unit) : BotUnit(unit) {}
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
-        // Calls on the controller take unit IDs for ownership reasons.
-        attack_all_in_range(unit);
+        default_military_behaviour();
     }
 };
-
-void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
-    auto id = unit.get_id();
-    if (!gc.is_move_ready(id)) return;
-
-    auto unitMapLocation = unit.get_location().get_map_location();
-    auto planet = unitMapLocation.get_planet();
-    auto& planetMap = gc.get_starting_planet(planet);
-    int w = planetMap.get_width();
-    int h = planetMap.get_height();
-    PathfindingMap passableMap(w, h);
-    for (int i = 0; i < w; i++) {
-        for (int j = 0; j < h; j++) {
-            auto location = MapLocation(planet, i, j);
-            if (planetMap.is_passable_terrain_at(location)) {
-                passableMap.weights[i][j] = 1.0;
-                if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
-                    passableMap.weights[i][j] = 1000.0;
-                }
-            } else {
-                passableMap.weights[i][j] = numeric_limits<double>::infinity();
-            }
-        }
-    }
-
-    PathfindingMap rewardMap(w, h);
-    rewardMap.weights[target.get_x()][target.get_y()] = 1;
-
-    Pathfinder pathfinder;
-    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, passableMap);
-
-    if (nextLocation != unitMapLocation) {
-        auto d = unitMapLocation.direction_to(nextLocation);
-        if (gc.can_move(id,d)){
-            gc.move_robot(id,d);
-        }
-    }
-}
 
 struct BotRanger : BotUnit {
     BotRanger(const Unit& unit) : BotUnit(unit) {}
@@ -311,48 +347,28 @@ struct BotRanger : BotUnit {
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
-        Unit* closest_unit = nullptr;
-        float closest_dist = 100000;
-
-        for (auto& enemy : enemyUnits) {
-            if (enemy.get_location().is_on_map()) {
-                auto pos = enemy.get_location().get_map_location();
-                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
-                if (dist < closest_dist) {
-                    closest_unit = &enemy;
-                    closest_dist = dist;
-                }
-            }
-        }
-
-        auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
-        for (auto& enemy : initial_units) {
-            if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
-                auto pos = enemy.get_location().get_map_location();
-                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
-                if (dist < closest_dist) {
-                    closest_unit = &enemy;
-                    closest_dist = dist;
-                }
-            }
-        }
-
-        if (closest_unit != nullptr) {
-            auto p = closest_unit->get_location().get_map_location();
-            move_with_pathfinding_to(unit, p);
-            unit = gc.get_unit(unit.get_id());
-        }
-
-        attack_all_in_range(unit);
+        default_military_behaviour();
     }
 };
 
 struct BotMage : BotUnit {
     BotMage(const Unit& unit) : BotUnit(unit) {}
+
+    void tick() {
+        if (!unit.get_location().is_on_map()) return;
+
+        default_military_behaviour();
+    }
 };
 
 struct BotHealer : BotUnit {
     BotHealer(const Unit& unit) : BotUnit(unit) {}
+
+    void tick() {
+        if (!unit.get_location().is_on_map()) return;
+
+        default_military_behaviour();
+    }
 };
 
 struct BotFactory : BotUnit {
