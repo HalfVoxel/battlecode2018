@@ -32,6 +32,7 @@ struct BotUnit {
 
 struct State {
     map<UnitType, int> typeCount;
+    double remainingKarboniteOnEarth;
 } state;
 
 struct MacroObject {
@@ -60,6 +61,14 @@ struct MacroObject {
 };
 
 vector<MacroObject> macroObjects;
+
+bool isOnMap(MapLocation location) {
+   auto planet = location.get_planet();
+   auto& planetMap = gc.get_starting_planet(planet);
+   int w = planetMap.get_width();
+   int h = planetMap.get_height();
+   return location.get_x() >= 0 && location.get_y() >= 0 && location.get_x() < w && location.get_y() < h;
+}
 
 struct BotWorker : BotUnit {
     BotWorker(const Unit unit) : BotUnit(unit) {}
@@ -114,8 +123,9 @@ struct BotWorker : BotUnit {
         for (int i = 0; i < 8; i++) {
             Direction d = (Direction) i;
             // Placing 'em blueprints
-            if(gc.can_blueprint(id, Factory, d) and gc.get_karbonite() >= unit_type_get_blueprint_cost(Factory)) {
-                double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 0;
+            auto newLocation = unitMapLocation.add(d);
+            if(isOnMap(newLocation) && gc.is_occupiable(newLocation)) {
+                double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
                 macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
                     if(gc.can_blueprint(id, Factory, d)){
                         gc.blueprint(id, Factory, d);
@@ -123,8 +133,9 @@ struct BotWorker : BotUnit {
                 });
             }
 
-            if(gc.can_replicate(id, d) && gc.get_karbonite() >= unit_type_get_replicate_cost()) {
-                double score = state.typeCount[Worker] < 10 ? (10 - state.typeCount[Worker]) : 0;
+            if(gc.can_replicate(id, d)) {
+                double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
+                double score = karbonitePerWorker * 0.006;
                 macroObjects.emplace_back(score, unit_type_get_replicate_cost(), 2, [=]{
                     if(gc.can_replicate(id, d)) {
                         gc.replicate(id, d);
@@ -356,7 +367,7 @@ struct BotFactory : BotUnit {
             }
         }
         if (gc.can_produce_robot(id, Ranger)){
-            double score = 0.5;
+            double score = 2;
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
                 gc.produce_robot(id, Ranger);
             });
@@ -443,6 +454,7 @@ int main() {
         for (auto& unit : ourUnits) {
             state.typeCount[unit.get_unit_type()]++;
         }
+        state.remainingKarboniteOnEarth = karboniteMap.sum();
 
         for (const auto unit : ourUnits) {
             const unsigned id = unit.get_id();

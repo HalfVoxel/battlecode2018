@@ -72,6 +72,16 @@ struct PathfindingMap {
         return (ret += other);
     }
 
+    double sum() {
+        double ret = 0.0;
+        for (int i = 0; i < h; i++) {
+            for (int j = 0; j < w; j++) {
+                ret += weights[i][j];
+            }
+        }
+        return ret;
+    }
+
     void print() const {
         for (int i = 0; i < h; i++) {
             for (int j = 0; j < w; j++) {
