@@ -130,7 +130,7 @@ struct BotKnight : BotUnit {
 
         // Calls on the controller take unit IDs for ownership reasons.
         const auto locus = unit.get_location().get_map_location();
-        const auto nearby = gc.sense_nearby_units(locus, 2);
+        const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
         for (auto place : nearby) {
             //Attacking 'em enemies
             if(place.get_team() != unit.get_team() && gc.is_attack_ready(id)){
