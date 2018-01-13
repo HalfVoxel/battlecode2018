@@ -701,7 +701,7 @@ struct BotRocket : BotUnit {
             }
         }
         else {
-            if (unit.get_structure_garrison().size() == unit.get_structure_max_capacity()) {
+            if (unit.get_structure_garrison().size() == unit.get_structure_max_capacity() || gc.get_round() == 749) {
                 auto& marsMap = gc.get_starting_planet(Mars);
                 int w = marsMap.get_width();
                 int h = marsMap.get_height();
@@ -727,11 +727,24 @@ void selectTravellersForRocket(Unit& unit) {
     if (unit.get_location().get_map_location().get_planet() == Mars) {
         return;
     }
+	if (!gc.can_launch_rocket()) {
+        return;
+	}
+    bool hasWorker = false;
+    for (auto id : unit.get_structure_garrison()) {
+        auto unit = gc.get_unit(id);
+        if (unit.get_unit_type() == Worker) {
+            hasWorker = true;
+        }
+    }
     int remainingTravellers = unit.get_structure_max_capacity() - unit.get_structure_garrison().size();
     auto unitLocation = unit.get_location().get_map_location();
     vector<pair<double, unsigned> > candidates;
     for (auto& u : ourUnits) {
         if (u.get_unit_type() == Rocket || u.get_unit_type() == Factory) {
+            continue;
+        }
+        if (u.get_unit_type() == Worker && state.typeCount[Worker] <= 3) {
             continue;
         }
         if (u.get_location().is_on_map()) {
@@ -743,6 +756,12 @@ void selectTravellersForRocket(Unit& unit) {
     }
     sort(candidates.begin(), candidates.end());
     for (int i = 0; i < min((int) candidates.size(), remainingTravellers); i++) {
+        if (gc.get_unit(candidates[i].second).get_unit_type() == Worker) {
+            if (hasWorker) {
+                continue;
+            }
+            hasWorker = true;
+        }
         unitShouldGoToRocket[candidates[i].second].push_back(unit.get_id());
     }
 }
@@ -941,7 +960,10 @@ int main() {
             for (int i = 0; i < w; i++) {
                 for (int j = 0; j < h; j++) {
                     auto location = MapLocation(planets[p], i, j);
-                    if (!planetMap.is_passable_terrain_at(location)) {
+					if (planetMap.is_passable_terrain_at(location)) {
+                        passableMap.weights[i][j] = 1.0;
+                    }
+                    else {
                         passableMap.weights[i][j] = numeric_limits<double>::infinity();
                     }
                 }
