@@ -239,7 +239,7 @@ struct BotUnit {
                 }
                 else if(gc.has_unit_at_location(nextLocation)) {
                     auto u = gc.sense_unit_at_location(nextLocation);
-                    if (u.get_team() == unit.get_team() && (u.get_unit_type() == Rocket || u.get_unit_type() == Rocket)) {
+                    if (u.get_team() == unit.get_team() && (u.get_unit_type() == Factory || u.get_unit_type() == Rocket)) {
                         if (gc.can_load(u.get_id(), unit.get_id())) {
                             gc.load(u.get_id(), unit.get_id());
                         }
@@ -295,7 +295,7 @@ struct BotUnit {
                     continue;
                 }
                 auto rocketLocation = unit.get_location().get_map_location();
-                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100000;
+                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
             }
             else {
                 cout << "Warning! A rocket disappeared" << endl;
@@ -438,7 +438,11 @@ struct BotWorker : BotUnit {
                 });
                 auto researchInfo = gc.get_research_info();
                 if (researchInfo.get_level(Rocket) >= 1) {
-                    double score = 0.1 * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
+                    double factor = 0.01;
+                    if (gc.get_round() > 600) {
+                        factor = 0.5;
+                    }
+                    double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
                         if(gc.can_blueprint(id, Rocket, d)){
                             gc.blueprint(id, Rocket, d);
@@ -500,7 +504,7 @@ struct BotWorker : BotUnit {
                     continue;
                 }
                 auto rocketLocation = unit.get_location().get_map_location();
-                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100000;
+                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
             }
             else {
                 cout << "Warning! A rocket disappeared" << endl;
@@ -614,7 +618,7 @@ struct BotHealer : BotUnit {
                     continue;
                 }
                 auto rocketLocation = unit.get_location().get_map_location();
-                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100000;
+                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
             }
             else {
                 cout << "Warning! A rocket disappeared" << endl;
@@ -738,7 +742,6 @@ void selectTravellersForRocket(Unit& unit) {
         }
     }
     sort(candidates.begin(), candidates.end());
-    remainingTravellers = 10000;
     for (int i = 0; i < min((int) candidates.size(), remainingTravellers); i++) {
         unitShouldGoToRocket[candidates[i].second].push_back(unit.get_id());
     }
@@ -860,7 +863,7 @@ int main() {
 
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
-                auto location = MapLocation(Earth, i, j);
+                auto location = MapLocation(gc.get_planet(), i, j);
                 if (gc.can_sense_location(location)) {
                     int karbonite = gc.get_karbonite_at(location);
                     karboniteMap.weights[i][j] = karbonite;
