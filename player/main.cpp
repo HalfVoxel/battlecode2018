@@ -200,30 +200,6 @@ void attack_all_in_range(const Unit& unit) {
     }
 }
 
-void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
-    auto id = unit.get_id();
-    if (!gc.is_move_ready(id)) return;
-
-    auto unitMapLocation = unit.get_location().get_map_location();
-    auto planet = unitMapLocation.get_planet();
-    auto& planetMap = gc.get_starting_planet(planet);
-    int w = planetMap.get_width();
-    int h = planetMap.get_height();
-
-    PathfindingMap rewardMap(w, h);
-    rewardMap.weights[target.get_x()][target.get_y()] = 1;
-
-    Pathfinder pathfinder;
-    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, passableMap);
-
-    if (nextLocation != unitMapLocation) {
-        auto d = unitMapLocation.direction_to(nextLocation);
-        if (gc.can_move(id,d)){
-            gc.move_robot(id,d);
-        }
-    }
-}
-
 struct BotUnit {
     Unit unit;
     const unsigned id;
@@ -459,7 +435,7 @@ struct BotWorker : BotUnit {
     }
         
     PathfindingMap getCostMap() {
-        return passableMap + enemyInfluenceMap + workerProximityMap;
+        return (passableMap/(fuzzyKarboniteMap + 20.0)) + enemyInfluenceMap + workerProximityMap;
     }
 
     void tick() {
