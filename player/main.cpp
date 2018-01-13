@@ -209,6 +209,8 @@ struct BotUnit {
     virtual void tick() {}
 
     void default_military_behaviour() {
+        
+        attack_all_in_range(unit);
 
         auto unitMapLocation = unit.get_location().get_map_location();
         auto planet = unitMapLocation.get_planet();
@@ -232,7 +234,7 @@ struct BotUnit {
             }
         }
 
-        if (unit.get_health() < unit.get_max_health()) {
+        if (unit.get_health() < 0.8 * unit.get_max_health()) {
             for (auto& u : ourUnits) {
                 if (u.get_unit_type() == Healer) {
                     if (!u.get_location().is_on_map()) {
@@ -592,6 +594,54 @@ struct BotRocket : BotUnit {
     BotRocket(const Unit& unit) : BotUnit(unit) {}
 };
 
+struct Researcher {
+    UnitType getBestResearch() {
+        map<UnitType, double> scores;
+
+        auto researchInfo = gc.get_research_info();
+        switch(researchInfo.get_level(Ranger)) {
+            case 0: 
+                scores[Ranger] = 10 + 0.1 * state.typeCount[Ranger];
+                break;
+            case 1: 
+                scores[Ranger] = 5 + 0.1 * state.typeCount[Ranger];
+                break;
+        }
+        switch(researchInfo.get_level(Healer)) {
+            case 0: 
+                scores[Healer] = 9 + 2 * state.typeCount[Healer];
+                break;
+            case 1: 
+                scores[Healer] = 8 + 1.5 * state.typeCount[Healer];
+                break;
+        }
+        switch(researchInfo.get_level(Worker)) {
+            case 0: 
+                scores[Worker] = 5;
+                break;
+            case 1: 
+                scores[Worker] = 3;
+                break;
+            case 2: 
+                scores[Worker] = 3;
+                break;
+            case 3: 
+                scores[Worker] = 6;
+                break;
+        }
+
+        UnitType bestType;
+        double bestScore = 0;
+        for (auto it : scores) {
+            if (it.second > bestScore) {
+                bestType = it.first;
+                bestScore = it.second;
+            }
+        }
+        return bestType;
+    }
+};
+
 void find_units() {
     ourUnits = gc.get_my_units();
     auto planet = gc.get_planet();
@@ -620,12 +670,6 @@ int main() {
     // std::uniform_int_distribution<int> distribution (0,8);
     // auto dice = std::bind ( distribution , generator );
     // Most methods return pointers; methods returning integers or enums are the only exception.
-    gc.queue_research(Ranger);
-    gc.queue_research(Ranger);
-    gc.queue_research(Ranger);
-    gc.queue_research(Worker);
-    gc.queue_research(Worker);
-    gc.queue_research(Worker);
 
     if (bc_has_err()) {
         // If there was an error creating gc, just die.
@@ -647,6 +691,8 @@ int main() {
     }
 
     initInfluence();
+            
+    Researcher researcher;
 
     // loop through the whole game.
     while (true) {
@@ -774,6 +820,12 @@ int main() {
             } else {
                 failedPaying = true;
             }
+        }
+        
+        auto researchInfo = gc.get_research_info();
+        if (researchInfo.get_queue().size() == 0) {
+            auto type = researcher.getBestResearch();
+            gc.queue_research(type);
         }
 
         // this line helps the output logs make more sense by forcing output to be sent
