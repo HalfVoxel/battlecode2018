@@ -309,9 +309,19 @@ struct BotWorker : BotUnit {
             //Building 'em blueprints
             if(gc.can_build(id, place.get_id())) {
                 const int& placeId = place.get_id();
-                macroObjects.emplace_back(1, 0, 1, [=]{
+                double score = (place.get_health() / (0.0 + place.get_max_health()));
+                macroObjects.emplace_back(score, 0, 1, [=]{
                     if(gc.can_build(id, place.get_id())) {
                         gc.build(id, placeId);
+                    }
+                });
+            }
+            if(gc.can_repair(id, place.get_id()) && place.get_health() < place.get_max_health()) {
+                const int& placeId = place.get_id();
+                double score = 2 - (place.get_health() / (0.0 + place.get_max_health()));
+                macroObjects.emplace_back(score, 0, 1, [=]{
+                    if(gc.can_repair(id, place.get_id())) {
+                        gc.repair(id, placeId);
                     }
                 });
             }
@@ -537,11 +547,11 @@ struct BotFactory : BotUnit {
         }
         if (gc.can_produce_robot(id, Healer)){
             double score = 0.0;
-            if (state.typeCount[Ranger] > 3) {
+            if (state.typeCount[Ranger] > 6) {
                 score += 2.5;
             }
             if (state.totalRobotDamage > 200) {
-                score += 4.0;
+                score += 1.0;
             }
             score /= state.typeCount[Healer];
             score += averageHealerSuccessRate * 1.5;
