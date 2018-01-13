@@ -35,7 +35,9 @@ vector<vector<double> > healerProximityInfluence;
 vector<vector<double> > healerInfluence;
 vector<vector<double> > workerProximityInfluence;
 vector<vector<double> > factoryProximityInfluence;
+vector<vector<double> > rocketProximityInfluence;
 double averageHealerSuccessRate;
+map<unsigned, vector<unsigned> > unitShouldGoToRocket;
 
 void initInfluence() {
     int r = 7;
@@ -111,7 +113,19 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            workerProximityInfluence[dx+r][dy+r] = 0.5 / (1.0 + dis2);
+            factoryProximityInfluence[dx+r][dy+r] = 0.5 / (1.0 + dis2);
+        }
+    }
+    
+    r = 5;
+    rocketProximityInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            rocketProximityInfluence[dx+r][dy+r] = 1.0 / (1.0 + dis2);
+            if (dis2 == 1) {
+                rocketProximityInfluence[dx+r][dy+r] = 5.0;
+            }
         }
     }
 }
@@ -208,8 +222,36 @@ struct BotUnit {
     BotUnit(const Unit& unit) : unit(unit), id(unit.get_id()) {}
     virtual void tick() {}
 
+    MapLocation moveUnit(PathfindingMap targetMap, PathfindingMap costMap) {
+        auto unitMapLocation = unit.get_location().get_map_location();
+        auto planet = unitMapLocation.get_planet();
+        auto tmpLocationPenalty = planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()];
+        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 0;
+        Pathfinder pathfinder;
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, targetMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
+        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = tmpLocationPenalty;
+
+        if (nextLocation != unitMapLocation) {
+            auto d = unitMapLocation.direction_to(nextLocation);
+            if (gc.is_move_ready(id)) {
+                if (gc.can_move(id, d)) {
+                    gc.move_robot(id,d);
+                }
+                else if(gc.has_unit_at_location(nextLocation)) {
+                    auto u = gc.sense_unit_at_location(nextLocation);
+                    if (u.get_team() == unit.get_team() && (u.get_unit_type() == Rocket || u.get_unit_type() == Rocket)) {
+                        if (gc.can_load(u.get_id(), unit.get_id())) {
+                            gc.load(u.get_id(), unit.get_id());
+                        }
+                    }
+                }
+            }
+        }
+        return nextLocation;
+    }
+
     void default_military_behaviour() {
-        
+
         attack_all_in_range(unit);
 
         auto unitMapLocation = unit.get_location().get_map_location();
@@ -245,16 +287,22 @@ struct BotUnit {
                 }
             }
         }
-
-        Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, targetMap, planetPassableMap[planet] + enemyInfluenceMap);
-
-        if (nextLocation != unitMapLocation) {
-            auto d = unitMapLocation.direction_to(nextLocation);
-            if (gc.can_move(id,d) && gc.is_move_ready(id)){
-                gc.move_robot(id,d);
+        
+        for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
+            if (gc.has_unit(rocketId)) {
+                auto unit = gc.get_unit(rocketId);
+                if (!unit.get_location().is_on_map()) {
+                    continue;
+                }
+                auto rocketLocation = unit.get_location().get_map_location();
+                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100000;
+            }
+            else {
+                cout << "Warning! A rocket disappeared" << endl;
             }
         }
+
+        moveUnit(targetMap, planetPassableMap[planet] + enemyInfluenceMap);
 
         attack_all_in_range(unit);
     }
@@ -271,6 +319,7 @@ struct State {
     map<UnitType, int> typeCount;
     double remainingKarboniteOnEarth;
     int totalRobotDamage;
+    int totalUnitCount;
 } state;
 
 struct MacroObject {
@@ -380,13 +429,22 @@ struct BotWorker : BotUnit {
             Direction d = (Direction) i;
             // Placing 'em blueprints
             auto newLocation = unitMapLocation.add(d);
-            if(isOnMap(newLocation) && gc.is_occupiable(newLocation)) {
+            if(isOnMap(newLocation) && gc.can_sense_location(newLocation) && gc.is_occupiable(newLocation)) {
                 double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
                 macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
                     if(gc.can_blueprint(id, Factory, d)){
                         gc.blueprint(id, Factory, d);
                     }
                 });
+                auto researchInfo = gc.get_research_info();
+                if (researchInfo.get_level(Rocket) >= 1) {
+                    double score = 0.1 * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
+                    macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
+                        if(gc.can_blueprint(id, Rocket, d)){
+                            gc.blueprint(id, Rocket, d);
+                        }
+                    });
+                }
             }
 
             if(gc.can_replicate(id, d)) {
@@ -405,7 +463,7 @@ struct BotWorker : BotUnit {
 
         PathfindingMap damagedStructureMap(w, h);
         for (auto& unit : ourUnits) {
-            if (unit.get_unit_type() == Factory) {
+            if (unit.get_unit_type() == Factory || unit.get_unit_type() == Rocket) {
                 double remainingLife = unit.get_health() / (unit.get_max_health() + 0.0);
                 if (remainingLife == 1.0) {
                     continue;
@@ -435,21 +493,25 @@ struct BotWorker : BotUnit {
             }
         }
 
-        auto tmpLocationPenalty = planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()];
-        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 0;
-        Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
-        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = tmpLocationPenalty;
-
-        if (nextLocation != unitMapLocation) {
-            auto d = unitMapLocation.direction_to(nextLocation);
-            if (gc.is_move_ready(id) && gc.can_move(id,d)){
-                gc.move_robot(id,d);
+        for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
+            if (gc.has_unit(rocketId)) {
+                auto unit = gc.get_unit(rocketId);
+                if(!unit.get_location().is_on_map()) {
+                    continue;
+                }
+                auto rocketLocation = unit.get_location().get_map_location();
+                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100000;
+            }
+            else {
+                cout << "Warning! A rocket disappeared" << endl;
             }
         }
+
+        auto nextLocation = moveUnit(targetMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
         
         if(unit.get_ability_heat() < 10) {
             unitMapLocation = nextLocation;
+            Pathfinder pathfinder;
             nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
 
             if (nextLocation != unitMapLocation) {
@@ -462,7 +524,6 @@ struct BotWorker : BotUnit {
                 });
             }
         }
-
     }
 };
 
@@ -507,9 +568,13 @@ struct BotHealer : BotUnit {
         int w = planetMap.get_width();
         int h = planetMap.get_height();
         PathfindingMap damagedRobotMap(w, h);
+        PathfindingMap targetMap(w, h);
         PathfindingMap healerProximityMap(w, h);
         bool succeededHealing = false;
         for (auto& u : ourUnits) {
+            if (!u.get_location().is_on_map()) {
+                continue;
+            }
             if (is_robot(u.get_unit_type())) {
                 if (u.get_id() == id) {
                     continue;
@@ -541,16 +606,23 @@ struct BotHealer : BotUnit {
                 }
             }
         }
-
-        Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, damagedRobotMap, planetPassableMap[planet] + healerProximityMap + enemyInfluenceMap);
-
-        if (nextLocation != unitMapLocation) {
-            auto d = unitMapLocation.direction_to(nextLocation);
-            if (gc.is_move_ready(id) && gc.can_move(id,d)){
-                gc.move_robot(id,d);
+        
+        for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
+            if (gc.has_unit(rocketId)) {
+                auto unit = gc.get_unit(rocketId);
+                if(!unit.get_location().is_on_map()) {
+                    continue;
+                }
+                auto rocketLocation = unit.get_location().get_map_location();
+                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100000;
+            }
+            else {
+                cout << "Warning! A rocket disappeared" << endl;
             }
         }
+
+
+        moveUnit(damagedRobotMap + targetMap, planetPassableMap[planet] + healerProximityMap + enemyInfluenceMap);
 
         for (auto& u : ourUnits) {
             if (is_robot(u.get_unit_type())) {
@@ -609,7 +681,68 @@ struct BotFactory : BotUnit {
 
 struct BotRocket : BotUnit {
     BotRocket(const Unit& unit) : BotUnit(unit) {}
+    
+    void tick() {
+        if (!unit.get_location().is_on_map()) {
+            return;
+        }
+        cout << "In garrison: " << unit.get_structure_garrison().size() << endl;
+        if(unit.get_location().get_map_location().get_planet() == Mars) {
+            auto garrison = unit.get_structure_garrison();
+            if (garrison.size() > 0){
+                Direction dir = (Direction) (rand() % 8);
+                if (gc.can_unload(id, dir)){
+                    gc.unload(id, dir);
+                }
+            }
+        }
+        else {
+            if (unit.get_structure_garrison().size() == unit.get_structure_max_capacity()) {
+                auto& marsMap = gc.get_starting_planet(Mars);
+                int w = marsMap.get_width();
+                int h = marsMap.get_height();
+                while(true) {
+                    int x = rand()%w;
+                    int y = rand()%h;
+                    auto location = MapLocation(Mars, x, y);
+                    if (gc.can_launch_rocket(unit.get_id(), location)) {
+                        gc.launch_rocket(unit.get_id(), location);
+                        break;
+                    }
+                }
+            }
+        }
+
+    }
 };
+
+void selectTravellersForRocket(Unit& unit) {
+    if (!unit.get_location().is_on_map()) {
+        return;
+    }
+    if (unit.get_location().get_map_location().get_planet() == Mars) {
+        return;
+    }
+    int remainingTravellers = unit.get_structure_max_capacity() - unit.get_structure_garrison().size();
+    auto unitLocation = unit.get_location().get_map_location();
+    vector<pair<double, unsigned> > candidates;
+    for (auto& u : ourUnits) {
+        if (u.get_unit_type() == Rocket || u.get_unit_type() == Factory) {
+            continue;
+        }
+        if (u.get_location().is_on_map()) {
+            auto uLocation = u.get_location().get_map_location();
+            int dx = uLocation.get_x() - unitLocation.get_x();
+            int dy = uLocation.get_y() - unitLocation.get_y();
+            candidates.emplace_back(dx*dx + dy*dy, u.get_id());
+        }
+    }
+    sort(candidates.begin(), candidates.end());
+    remainingTravellers = 10000;
+    for (int i = 0; i < min((int) candidates.size(), remainingTravellers); i++) {
+        unitShouldGoToRocket[candidates[i].second].push_back(unit.get_id());
+    }
+}
 
 struct Researcher {
     UnitType getBestResearch() {
@@ -644,6 +777,17 @@ struct Researcher {
                 break;
             case 3: 
                 scores[Worker] = 6;
+                break;
+        }
+        switch(researchInfo.get_level(Rocket)) {
+            case 0: 
+                scores[Rocket] = 7;
+                break;
+            case 1: 
+                scores[Rocket] = 6;
+                break;
+            case 2: 
+                scores[Rocket] = 6;
                 break;
         }
 
@@ -719,7 +863,7 @@ int main() {
                 auto location = MapLocation(Earth, i, j);
                 if (gc.can_sense_location(location)) {
                     int karbonite = gc.get_karbonite_at(location);
-                    karboniteMap.weights[i][j] = min(karboniteMap.weights[i][j], (double) karbonite);
+                    karboniteMap.weights[i][j] = karbonite;
                 }
             }
         }
@@ -753,6 +897,18 @@ int main() {
                     auto pos = u.get_location().get_map_location();
                     workerProximityMap.addInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
                 }
+                if (u.get_unit_type() == Rocket) {
+                    auto pos = u.get_location().get_map_location();
+                    workerProximityMap.addInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
+                }
+            }
+        }
+
+        unitShouldGoToRocket.clear();
+
+        for (auto& unit : ourUnits) {
+            if (unit.get_unit_type() == Rocket) {
+                selectTravellersForRocket(unit);
             }
         }
 
@@ -766,6 +922,7 @@ int main() {
         state.totalRobotDamage = 0;
         for (auto& unit : ourUnits) {
             state.typeCount[unit.get_unit_type()]++;
+            state.totalUnitCount++;
             if (is_robot(unit.get_unit_type())) {
                 state.totalRobotDamage += unit.get_max_health() - unit.get_health();
             }
@@ -781,18 +938,26 @@ int main() {
             for (int i = 0; i < w; i++) {
                 for (int j = 0; j < h; j++) {
                     auto location = MapLocation(planets[p], i, j);
-                    if (planetMap.is_passable_terrain_at(location)) {
-                        passableMap.weights[i][j] = 1.0;
-                        if (gc.can_sense_location(location) && !gc.is_occupiable(location)) {
-                            passableMap.weights[i][j] = 1000.0;
-                        }
-                    }
-                    else {
+                    if (!planetMap.is_passable_terrain_at(location)) {
                         passableMap.weights[i][j] = numeric_limits<double>::infinity();
                     }
                 }
             }
             planetPassableMap[planets[p]] = passableMap;
+        }
+
+        for (const auto unit : enemyUnits) {
+            auto unitMapLocation = unit.get_location().get_map_location();
+            auto planet = unitMapLocation.get_planet();
+            planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+        }
+
+        for (const auto unit : ourUnits) {
+            if (unit.get_unit_type() != Factory && unit.get_unit_type() != Rocket && unit.get_location().is_on_map()) {
+                auto unitMapLocation = unit.get_location().get_map_location();
+                auto planet = unitMapLocation.get_planet();
+                planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+            }
         }
 
         for (const auto unit : ourUnits) {
