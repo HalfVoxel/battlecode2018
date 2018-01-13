@@ -114,20 +114,6 @@ struct PathfindingMap {
         return (ret /= other);
     }
 
-    PathfindingMap& operator^= (const PathfindingMap& other) {
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                weights[i][j] ^= other.weights[i][j];
-            }
-        }
-        return (*this);
-    }
-
-    PathfindingMap operator^ (const PathfindingMap& other) const {
-        auto ret = (*this);
-        return (ret ^= other);
-    }
-
     PathfindingMap operator+ (double factor) const {
         PathfindingMap ret = PathfindingMap(w, h);
         for (int i = 0; i < w; i++) {
