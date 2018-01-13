@@ -373,6 +373,9 @@ struct BotWorker : BotUnit {
             });
         }
 
+        double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
+        double replicateScore = karbonitePerWorker * 0.005 + 2.5 / state.typeCount[Worker];
+
         for (int i = 0; i < 8; i++) {
             Direction d = (Direction) i;
             // Placing 'em blueprints
@@ -387,9 +390,7 @@ struct BotWorker : BotUnit {
             }
 
             if(gc.can_replicate(id, d)) {
-                double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
-                double score = karbonitePerWorker * 0.006;
-                macroObjects.emplace_back(score, unit_type_get_replicate_cost(), 2, [=]{
+                macroObjects.emplace_back(replicateScore, unit_type_get_replicate_cost(), 2, [=]{
                     if(gc.can_replicate(id, d)) {
                         gc.replicate(id, d);
                     }
@@ -446,6 +447,22 @@ struct BotWorker : BotUnit {
                 gc.move_robot(id,d);
             }
         }
+        
+        if(unit.get_ability_heat() < 10) {
+            unitMapLocation = nextLocation;
+            nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
+
+            if (nextLocation != unitMapLocation) {
+                auto d = unitMapLocation.direction_to(nextLocation);
+                double score = replicateScore + 0.1 * log(1.0 + pathfinder.bestScore);
+                macroObjects.emplace_back(score, unit_type_get_replicate_cost(), 2, [=]{
+                    if(gc.can_replicate(id, d)) {
+                        gc.replicate(id, d);
+                    }
+                });
+            }
+        }
+
     }
 };
 

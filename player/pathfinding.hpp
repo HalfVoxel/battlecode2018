@@ -142,7 +142,10 @@ struct PathfindingMap {
 };
     
 struct Pathfinder {
-    MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) const {
+
+    double bestScore;
+
+    MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
         int w = values.w;
         int h = values.h;
         vector<vector<double> > cost(w, vector<double>(h, numeric_limits<double>::infinity()));
@@ -156,7 +159,7 @@ struct Pathfinder {
         };
         Position bestPosition(from.get_x(), from.get_y());
         cost[from.get_x()][from.get_y()] = costs.weights[from.get_x()][from.get_y()];
-        auto bestScore = averageScore(bestPosition);
+        bestScore = averageScore(bestPosition);
         pq.push(PathfindingEntry(0.0, bestPosition));
         cost[from.get_x()][from.get_y()] = 0;
 
