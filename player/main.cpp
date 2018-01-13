@@ -23,6 +23,7 @@ Team ourTeam;
 Team enemyTeam;
 PathfindingMap karboniteMap;
 PathfindingMap enemyInfluenceMap;
+PathfindingMap workerProximityMap;
 map<Planet, PathfindingMap> planetPassableMap;
 void invalidate_units();
 struct BotUnit;
@@ -32,6 +33,8 @@ vector<vector<double> > mageTargetInfluence;
 vector<vector<double> > knightTargetInfluence;
 vector<vector<double> > healerProximityInfluence;
 vector<vector<double> > healerInfluence;
+vector<vector<double> > workerProximityInfluence;
+vector<vector<double> > factoryProximityInfluence;
 double averageHealerSuccessRate;
 
 void initInfluence() {
@@ -91,6 +94,24 @@ void initInfluence() {
             if (dis2 <= 30) {
                 healerInfluence[dx+r][dy+r] = 1;
             }
+        }
+    }
+    
+    r = 5;
+    workerProximityInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            workerProximityInfluence[dx+r][dy+r] = 0.7 / (1.0 + dis2);
+        }
+    }
+    
+    r = 5;
+    factoryProximityInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            workerProximityInfluence[dx+r][dy+r] = 0.5 / (1.0 + dis2);
         }
     }
 }
@@ -411,8 +432,11 @@ struct BotWorker : BotUnit {
             }
         }
 
+        auto tmpLocationPenalty = planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()];
+        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 0;
         Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet] + enemyInfluenceMap);
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
+        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = tmpLocationPenalty;
 
         if (nextLocation != unitMapLocation) {
             auto d = unitMapLocation.direction_to(nextLocation);
@@ -651,6 +675,20 @@ int main() {
                 if (u.get_unit_type() == Knight) {
                     auto pos = u.get_location().get_map_location();
                     enemyInfluenceMap.addInfluence(knightTargetInfluence, pos.get_x(), pos.get_y());
+                }
+            }
+        }
+        
+        workerProximityMap = PathfindingMap(w, h);
+        for (auto& u : ourUnits) {
+            if (u.get_location().is_on_map()) {
+                if (u.get_unit_type() == Worker) {
+                    auto pos = u.get_location().get_map_location();
+                    workerProximityMap.addInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
+                }
+                if (u.get_unit_type() == Factory) {
+                    auto pos = u.get_location().get_map_location();
+                    workerProximityMap.addInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
                 }
             }
         }

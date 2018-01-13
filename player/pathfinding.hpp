@@ -72,11 +72,21 @@ struct PathfindingMap {
         return (ret += other);
     }
 
-    double sum() {
+    double sum() const {
         double ret = 0.0;
         for (int i = 0; i < h; i++) {
             for (int j = 0; j < w; j++) {
                 ret += weights[i][j];
+            }
+        }
+        return ret;
+    }
+
+    double getMax() const {
+        double ret = 0.0;
+        for (int i = 0; i < h; i++) {
+            for (int j = 0; j < w; j++) {
+                ret = max(ret, weights[i][j]);
             }
         }
         return ret;
@@ -149,6 +159,8 @@ struct Pathfinder {
         auto bestScore = averageScore(bestPosition);
         pq.push(PathfindingEntry(0.0, bestPosition));
         cost[from.get_x()][from.get_y()] = 0;
+
+        double valueUpperBound = values.getMax();
     
         while (!pq.empty()) {
             auto currentEntry = pq.top();
@@ -157,8 +169,11 @@ struct Pathfinder {
             if (currentEntry.cost > cost[currentPos.x][currentPos.y]) {
                 continue;
             }
+            if (valueUpperBound / (cost[currentPos.x][currentPos.y] + 1.0) <= bestScore) {
+                break;
+            }
             auto currentScore = averageScore(currentPos);
-            if (currentScore > bestScore) {
+            if (currentScore > bestScore && (currentPos.x != from.get_x() || currentPos.y != from.get_y())) {
                 bestPosition = currentPos;
                 bestScore = currentScore;
             }
