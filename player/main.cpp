@@ -352,10 +352,10 @@ struct BotMage : BotUnit {
 
 struct BotHealer : BotUnit {
     BotHealer(const Unit& unit) : BotUnit(unit) {}
-    
+
     void tick() {
         if (!unit.get_location().is_on_map()) return;
-        
+
         auto unitMapLocation = unit.get_location().get_map_location();
         auto planet = unitMapLocation.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
@@ -396,6 +396,7 @@ struct BotHealer : BotUnit {
                 gc.move_robot(id,d);
             }
         }
+
         for (auto& u : ourUnits) {
             if (is_robot(u.get_unit_type())) {
                 double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
@@ -533,7 +534,7 @@ int main() {
             }
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
-        
+
         Planet planets[] = { Earth, Mars };
         for (int p = 0; p < 2; ++p) {
             auto& planetMap = gc.get_starting_planet(planets[p]);
@@ -579,10 +580,11 @@ int main() {
             } else {
                 botUnitPtr = unitMap[id];
             }
+            botUnitPtr->unit = unit;
+        }
 
-            BotUnit& botUnit = *botUnitPtr;
-            botUnit.unit = unit;
-            botUnit.tick();
+        for (const auto unit : ourUnits) {
+            unitMap[unit.get_id()]->tick();
         }
         sort(macroObjects.rbegin(), macroObjects.rend());
         bool failedPaying = false;
