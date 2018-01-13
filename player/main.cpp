@@ -688,6 +688,7 @@ struct BotHealer : BotUnit {
 
                 if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
                     gc.heal(id, u.get_id());
+                    invalidate_units();
                     succeededHealing = true;
                 }
             }
@@ -704,6 +705,7 @@ struct BotHealer : BotUnit {
                 }
                 if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
                     gc.heal(id, u.get_id());
+                    invalidate_units();
                     succeededHealing = true;
                 }
             }
