@@ -117,6 +117,9 @@ void initInfluence() {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
             factoryProximityInfluence[dx+r][dy+r] = 0.5 / (1.0 + dis2);
+            if (dis2 == 1) {
+                factoryProximityInfluence[dx+r][dy+r] = 3.0;
+            }
         }
     }
     
@@ -232,9 +235,12 @@ struct BotUnit {
     MapLocation getNextLocation(MapLocation from, bool allowStructures) {
         auto targetMap = getTargetMap();
         auto costMap = getCostMap();
-        if (!allowStructures) {
-            int x = from.get_x();
-            int y = from.get_y();
+        int x = from.get_x();
+        int y = from.get_y();
+        if (allowStructures) {
+            costMap.weights[x][y] = 1;
+        }
+        else {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     int nx = x + dx;
@@ -308,7 +314,7 @@ struct BotUnit {
                 targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
             }
         }
-
+        
         auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
         for (auto& enemy : initial_units) {
             if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
@@ -326,6 +332,13 @@ struct BotUnit {
                     auto pos = u.get_location().get_map_location();
                     targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), 10);
                 }
+            }
+        }
+
+        for (auto& u : ourUnits) {
+            if (u.get_location().is_on_map() && is_structure(u.get_unit_type())) {
+                auto pos = u.get_location().get_map_location();
+                targetMap.weights[pos.get_x()][pos.get_y()] = 0;
             }
         }
         
@@ -508,7 +521,7 @@ struct BotWorker : BotUnit {
         }
 
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
-        double replicateScore = karbonitePerWorker * 0.005 + 2.5 / state.typeCount[Worker];
+        double replicateScore = karbonitePerWorker * 0.008 + 2.5 / state.typeCount[Worker];
 
         for (int i = 0; i < 8; i++) {
             Direction d = (Direction) i;
@@ -772,7 +785,7 @@ struct BotFactory : BotUnit {
                 score += 1.0;
             }
             score /= state.typeCount[Healer];
-            score += averageHealerSuccessRate * 1.5;
+            score += averageHealerSuccessRate * 1.8;
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
                 if (gc.can_produce_robot(id, Healer)) {
                     gc.produce_robot(id, Healer);
@@ -1136,11 +1149,11 @@ int main() {
                     auto pos = u.get_location().get_map_location();
                     workerProximityMap.addInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
                 }
-                if (u.get_unit_type() == Factory) {
+                if (u.get_unit_type() == Factory && u.structure_is_built()) {
                     auto pos = u.get_location().get_map_location();
                     workerProximityMap.addInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
                 }
-                if (u.get_unit_type() == Rocket) {
+                if (u.get_unit_type() == Rocket && u.structure_is_built()) {
                     auto pos = u.get_location().get_map_location();
                     workerProximityMap.addInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
                 }
@@ -1160,7 +1173,12 @@ int main() {
                     int x = location.get_x();
                     int y = location.get_y();
                     if (x >= 0 && x < w && y >= 0 && y < h) {
-                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 15 * (2.0 - remainingLife));
+                        if (unit.structure_is_built()) {
+                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 15 * (2.0 - remainingLife));
+                        }
+                        else {
+                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 30 * (1.5 + remainingLife));
+                        }
                     }
                 }
             }
