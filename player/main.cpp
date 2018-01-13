@@ -690,7 +690,9 @@ struct BotRocket : BotUnit {
         if (!unit.get_location().is_on_map()) {
             return;
         }
-        cout << "In garrison: " << unit.get_structure_garrison().size() << endl;
+        if (!unit.structure_is_built()) {
+            return;
+        }
         if(unit.get_location().get_map_location().get_planet() == Mars) {
             auto garrison = unit.get_structure_garrison();
             if (garrison.size() > 0){
@@ -709,7 +711,8 @@ struct BotRocket : BotUnit {
                     int x = rand()%w;
                     int y = rand()%h;
                     auto location = MapLocation(Mars, x, y);
-                    if (gc.can_launch_rocket(unit.get_id(), location)) {
+                    if (marsMap.is_passable_terrain_at(location)) {
+//                    if (gc.can_launch_rocket(unit.get_id(), location)) {
                         gc.launch_rocket(unit.get_id(), location);
                         break;
                     }
@@ -861,14 +864,14 @@ int main() {
     }
     printf("Connected!\n");
 
-    auto& earthMap = gc.get_starting_planet(Earth);
-    int w = earthMap.get_width();
-    int h = earthMap.get_height();
+    auto& planetMap = gc.get_starting_planet(gc.get_planet());
+    int w = planetMap.get_width();
+    int h = planetMap.get_height();
     karboniteMap = PathfindingMap(w, h);
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
-            auto location = MapLocation(Earth, i, j);
-            int karbonite = earthMap.get_initial_karbonite_at(location);
+            auto location = MapLocation(gc.get_planet(), i, j);
+            int karbonite = planetMap.get_initial_karbonite_at(location);
             karboniteMap.weights[i][j] = karbonite;
         }
     }
@@ -879,6 +882,15 @@ int main() {
 
     // loop through the whole game.
     while (true) {
+
+        if (gc.get_planet() == Mars) {
+            auto asteroidPattern = gc.get_asteroid_pattern();
+            if (asteroidPattern.has_asteroid_on_round(gc.get_round())) {
+                auto strike = asteroidPattern.get_asteroid_on_round(gc.get_round());
+                auto location = strike.get_map_location();
+                karboniteMap.weights[location.get_x()][location.get_y()] += strike.get_karbonite();
+            }
+        }
 
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
