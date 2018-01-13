@@ -727,7 +727,7 @@ void selectTravellersForRocket(Unit& unit) {
     if (unit.get_location().get_map_location().get_planet() == Mars) {
         return;
     }
-	if (!gc.can_launch_rocket()) {
+	if (!unit.structure_is_built()) {
         return;
 	}
     bool hasWorker = false;
