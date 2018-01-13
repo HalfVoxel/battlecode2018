@@ -162,6 +162,8 @@ static_assert((int)Rocket == 6, "");
 void attack_all_in_range(const Unit& unit) {
     if (!gc.is_attack_ready(unit.get_id())) return;
 
+	if (!unit.get_location().is_on_map()) return;
+
     // Calls on the controller take unit IDs for ownership reasons.
     const auto locus = unit.get_location().get_map_location();
     const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
@@ -255,13 +257,18 @@ struct BotUnit {
             auto d = unitMapLocation.direction_to(nextLocation);
             if (gc.is_move_ready(id)) {
                 if (gc.can_move(id, d)) {
+                    planetPassableMap[gc.get_planet()].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                     gc.move_robot(id,d);
+                    invalidate_units();
+                    planetPassableMap[gc.get_planet()].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
                 }
                 else if(gc.has_unit_at_location(nextLocation)) {
                     auto u = gc.sense_unit_at_location(nextLocation);
                     if (u.get_team() == unit.get_team() && (u.get_unit_type() == Factory || u.get_unit_type() == Rocket)) {
                         if (gc.can_load(u.get_id(), unit.get_id())) {
+                            planetPassableMap[gc.get_planet()].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                             gc.load(u.get_id(), unit.get_id());
+                            invalidate_units();
                         }
                     }
                 }
@@ -534,7 +541,7 @@ struct BotWorker : BotUnit {
         auto nextLocation = getNextLocation();
         moveToLocation(nextLocation);
         
-        if(unit.get_ability_heat() < 10) {
+        if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
             unitMapLocation = nextLocation;
             Pathfinder pathfinder;
             nextLocation = getNextLocation();
