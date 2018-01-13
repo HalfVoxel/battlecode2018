@@ -22,6 +22,7 @@ vector<Unit> allUnits;
 Team ourTeam;
 Team enemyTeam;
 PathfindingMap karboniteMap;
+PathfindingMap fuzzyKarboniteMap;
 PathfindingMap enemyInfluenceMap;
 PathfindingMap workerProximityMap;
 map<Planet, PathfindingMap> planetPassableMap;
@@ -289,17 +290,12 @@ struct BotUnit {
         }
         
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-            if (gc.has_unit(rocketId)) {
-                auto unit = gc.get_unit(rocketId);
-                if (!unit.get_location().is_on_map()) {
-                    continue;
-                }
-                auto rocketLocation = unit.get_location().get_map_location();
-                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
+            auto unit = gc.get_unit(rocketId);
+            if (!unit.get_location().is_on_map()) {
+                continue;
             }
-            else {
-                cout << "Warning! A rocket disappeared" << endl;
-            }
+            auto rocketLocation = unit.get_location().get_map_location();
+            targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
         }
 
         moveUnit(targetMap, planetPassableMap[planet] + enemyInfluenceMap);
@@ -484,7 +480,7 @@ struct BotWorker : BotUnit {
             }
         }
         
-        PathfindingMap targetMap = karboniteMap + damagedStructureMap;
+        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap;
         if (unit.get_health() < unit.get_max_health()) {
             for (auto& u : ourUnits) {
                 if (u.get_unit_type() == Healer) {
@@ -498,17 +494,12 @@ struct BotWorker : BotUnit {
         }
 
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-            if (gc.has_unit(rocketId)) {
-                auto unit = gc.get_unit(rocketId);
-                if(!unit.get_location().is_on_map()) {
-                    continue;
-                }
-                auto rocketLocation = unit.get_location().get_map_location();
-                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
+            auto unit = gc.get_unit(rocketId);
+            if(!unit.get_location().is_on_map()) {
+                continue;
             }
-            else {
-                cout << "Warning! A rocket disappeared" << endl;
-            }
+            auto rocketLocation = unit.get_location().get_map_location();
+            targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
         }
 
         auto nextLocation = moveUnit(targetMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
@@ -516,7 +507,7 @@ struct BotWorker : BotUnit {
         if(unit.get_ability_heat() < 10) {
             unitMapLocation = nextLocation;
             Pathfinder pathfinder;
-            nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
+            nextLocation = pathfinder.getNextLocation(unitMapLocation, targetMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
 
             if (nextLocation != unitMapLocation) {
                 auto d = unitMapLocation.direction_to(nextLocation);
@@ -612,17 +603,12 @@ struct BotHealer : BotUnit {
         }
         
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-            if (gc.has_unit(rocketId)) {
-                auto unit = gc.get_unit(rocketId);
-                if(!unit.get_location().is_on_map()) {
-                    continue;
-                }
-                auto rocketLocation = unit.get_location().get_map_location();
-                targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
+            auto unit = gc.get_unit(rocketId);
+            if(!unit.get_location().is_on_map()) {
+                continue;
             }
-            else {
-                cout << "Warning! A rocket disappeared" << endl;
-            }
+            auto rocketLocation = unit.get_location().get_map_location();
+            targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
         }
 
 
@@ -883,6 +869,11 @@ int main() {
     // loop through the whole game.
     while (true) {
 
+        unsigned round = gc.get_round();
+        printf("Round: %d\n", round);
+
+        find_units();
+
         if (gc.get_planet() == Mars) {
             auto asteroidPattern = gc.get_asteroid_pattern();
             if (asteroidPattern.has_asteroid_on_round(gc.get_round())) {
@@ -898,6 +889,21 @@ int main() {
                 if (gc.can_sense_location(location)) {
                     int karbonite = gc.get_karbonite_at(location);
                     karboniteMap.weights[i][j] = karbonite;
+                }
+            }
+        }
+
+        fuzzyKarboniteMap = PathfindingMap(w, h);
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                for (int k = -1; k <= 1; k++) {
+                    for (int l = -1; l <= 1; l++) {
+                        int x = i+k;
+                        int y = j+l;
+                        if (x >= 0 && y >= 0 && x < w && y < w){
+                            fuzzyKarboniteMap.weights[i][j] = max(fuzzyKarboniteMap.weights[i][j], karboniteMap.weights[x][y]);
+                        }
+                    }
                 }
             }
         }
@@ -945,11 +951,6 @@ int main() {
                 selectTravellersForRocket(unit);
             }
         }
-
-        unsigned round = gc.get_round();
-        printf("Round: %d\n", round);
-
-        find_units();
 
         macroObjects.clear();
         state = State();
