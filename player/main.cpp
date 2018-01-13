@@ -23,7 +23,9 @@ Team ourTeam;
 Team enemyTeam;
 PathfindingMap karboniteMap;
 map<Planet, PathfindingMap> planetPassableMap;
-
+void invalidate_units();
+struct BotUnit;
+map<unsigned int, BotUnit*> unitMap;
 
 // Relative values of different unit types when at "low" (not full) health
 float unit_defensive_strategic_value[] = {
@@ -46,6 +48,7 @@ float unit_strategic_value[] = {
     2, // Factory
     2, // Rocket
 };
+
 
 static_assert((int)Worker == 0, "");
 static_assert((int)Rocket == 6, "");
@@ -84,6 +87,7 @@ void attack_all_in_range(const Unit& unit) {
     if (best_unit != nullptr) {
         //Attacking 'em enemies
         gc.attack(unit.get_id(), best_unit->get_id());
+        invalidate_units();
     }
 }
 
@@ -154,6 +158,13 @@ struct BotUnit {
     }
 };
 
+/** Call if our units may have been changed in some way, e.g damaged by Mage splash damage and killed */
+void invalidate_units() {
+    for (auto& unit : ourUnits) {
+        unitMap[unit.get_id()]->unit = gc.get_unit(unit.get_id());
+    }
+}
+
 struct State {
     map<UnitType, int> typeCount;
     double remainingKarboniteOnEarth;
@@ -164,6 +175,7 @@ struct MacroObject {
     double score;
     int cost;
     int priority;
+    int rnd;
     function<void()> lambda;
 
     MacroObject(double _score, int _cost, int _priority, function<void()> _lambda) {
@@ -171,6 +183,7 @@ struct MacroObject {
         cost = _cost;
         priority = _priority;
         lambda = _lambda;
+        rnd = rand();
     }
 
     void execute() {
@@ -181,7 +194,10 @@ struct MacroObject {
         if (priority != other.priority) {
             return priority < other.priority;
         }
-        return score < other.score;
+        if (score != other.score) {
+            return score < other.score;
+        }
+        return rnd < other.rnd;
     }
 };
 
@@ -476,7 +492,6 @@ int main() {
         exit(1);
     }
     printf("Connected!\n");
-    map<unsigned int, BotUnit*> unitMap;
 
     auto& earthMap = gc.get_starting_planet(Earth);
     int w = earthMap.get_width();
@@ -543,6 +558,7 @@ int main() {
         }
 
         for (const auto unit : ourUnits) {
+            assert(gc.has_unit(unit.get_id()));
             const unsigned id = unit.get_id();
             BotUnit* botUnitPtr;
 
