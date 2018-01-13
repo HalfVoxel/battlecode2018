@@ -26,6 +26,46 @@ map<Planet, PathfindingMap> planetPassableMap;
 void invalidate_units();
 struct BotUnit;
 map<unsigned int, BotUnit*> unitMap;
+vector<vector<double> > rangerTargetInfluence;
+vector<vector<double> > healerProximityInfluence;
+vector<vector<double> > healerInfluence;
+
+void initInfluence() {
+    int r = 7;
+    rangerTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 <= 10) {
+                continue;
+            }
+            if (dis2 > 50) {
+                continue;
+            }
+            rangerTargetInfluence[dx+r][dy+r] = 1;
+        }
+    }
+    
+    r = 5;
+    healerProximityInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            healerProximityInfluence[dx+r][dy+r] = 1 / (1.0 + dis2);
+        }
+    }
+    
+    r = 6;
+    healerInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 <= 30) {
+                healerInfluence[dx+r][dy+r] = 1;
+            }
+        }
+    }
+}
 
 // Relative values of different unit types when at "low" (not full) health
 float unit_defensive_strategic_value[] = {
@@ -131,23 +171,7 @@ struct BotUnit {
         for (auto& enemy : enemyUnits) {
             if (enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
-                int r = 8;
-                for (int i = max(0, pos.get_x()-r); i < w && i <= pos.get_x()+r; i++) {
-                    for (int j = max(0, pos.get_y()-r); j < h && j <= pos.get_y()+r; j++) {
-                        int dx = i - pos.get_x();
-                        int dy = j - pos.get_y();
-                        unsigned dis2 = dx*dx + dy*dy;
-                        if (unit.get_unit_type() == Ranger && dis2 <= unit.get_ranger_cannot_attack_range()) {
-                            continue;
-                        }
-                        if (dis2 > unit.get_attack_range()) {
-                            continue;
-                        }
-                        double score = dis2 * 0.1;
-                        targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], score);
-
-                    }
-                }
+                targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
             }
         }
 
@@ -166,20 +190,7 @@ struct BotUnit {
                         continue;
                     }
                     auto pos = u.get_location().get_map_location();
-                    int r = 6;
-                    for (int i = max(0, pos.get_x()-r); i < w && i <= pos.get_x()+r; i++) {
-                        for (int j = max(0, pos.get_y()-r); j < h && j <= pos.get_y()+r; j++) {
-                            int dx = i - pos.get_x();
-                            int dy = j - pos.get_y();
-                            unsigned dis2 = dx*dx + dy*dy;
-                            if (dis2 > u.get_attack_range()) {
-                                continue;
-                            }
-                            double score = 10;
-                            targetMap.weights[pos.get_x()][pos.get_y()] += score;
-
-                        }
-                    }
+                    targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), 10);
                 }
             }
         }
@@ -348,9 +359,32 @@ struct BotWorker : BotUnit {
                 }
             }
         }
+        
+        PathfindingMap enemyInfluenceMap(w, h);
+        for (auto& u : enemyUnits) {
+            if (u.get_location().is_on_map()) {
+                if (u.get_unit_type() == Ranger) {
+                    auto pos = u.get_location().get_map_location();
+                    enemyInfluenceMap.addInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                }
+            }
+        }
+        
+        PathfindingMap targetMap = karboniteMap + damagedStructureMap;
+        if (unit.get_health() < unit.get_max_health()) {
+            for (auto& u : ourUnits) {
+                if (u.get_unit_type() == Healer) {
+                    if (!u.get_location().is_on_map()) {
+                        continue;
+                    }
+                    auto pos = u.get_location().get_map_location();
+                    targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), 10);
+                }
+            }
+        }
 
         Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet]);
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, karboniteMap + damagedStructureMap, planetPassableMap[planet] + enemyInfluenceMap);
 
         if (nextLocation != unitMapLocation) {
             auto d = unitMapLocation.direction_to(nextLocation);
@@ -402,6 +436,7 @@ struct BotHealer : BotUnit {
         int w = planetMap.get_width();
         int h = planetMap.get_height();
         PathfindingMap damagedRobotMap(w, h);
+        PathfindingMap healerProximityMap(w, h);
         for (auto& u : ourUnits) {
             if (is_robot(u.get_unit_type())) {
                 if (u.get_id() == id) {
@@ -411,6 +446,9 @@ struct BotHealer : BotUnit {
                 if (remainingLife == 1.0) {
                     continue;
                 }
+                    
+                auto uMapLocation = u.get_location().get_map_location();
+
                 for (int i = 0; i < 8; i++) {
                     Direction d = (Direction) i;
                     auto location = u.get_location().get_map_location().add(d);
@@ -421,13 +459,18 @@ struct BotHealer : BotUnit {
                     }
                 }
 
+                if (u.get_unit_type() == Healer) {
+                    healerProximityMap.addInfluence(healerProximityInfluence, uMapLocation.get_x(), uMapLocation.get_y());
+                }
+
                 if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
                     gc.heal(id, u.get_id());
                 }
             }
         }
+
         Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, damagedRobotMap, planetPassableMap[planet]);
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, damagedRobotMap, planetPassableMap[planet] + healerProximityMap);
 
         if (nextLocation != unitMapLocation) {
             auto d = unitMapLocation.direction_to(nextLocation);
@@ -544,6 +587,8 @@ int main() {
             karboniteMap.weights[i][j] = karbonite;
         }
     }
+
+    initInfluence();
 
     // loop through the whole game.
     while (true) {

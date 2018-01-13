@@ -82,6 +82,45 @@ struct PathfindingMap {
         return ret;
     }
 
+    void addInfluence(vector<vector<double> > influence, int x0, int y0) {
+        int r = influence.size() / 2;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                int x = x0 + dx;
+                int y = y0 + dy; 
+                if (x >= 0 && y >= 0 && x < w && y < h) {
+                    weights[x][y] += influence[dx+r][dy+r];
+                }
+            }
+        }
+    }
+    
+    void addInfluenceMultiple(vector<vector<double> > influence, int x0, int y0, double factor) {
+        int r = influence.size() / 2;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                int x = x0 + dx;
+                int y = y0 + dy; 
+                if (x >= 0 && y >= 0 && x < w && y < h) {
+                    weights[x][y] += influence[dx+r][dy+r] * factor;
+                }
+            }
+        }
+    }
+
+    void maxInfluence(vector<vector<double> > influence, int x0, int y0) {
+        int r = influence.size() / 2;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                int x = x0 + dx;
+                int y = y0 + dy; 
+                if (x >= 0 && y >= 0 && x < w && y < h) {
+                    weights[x][y] = max(weights[x][y], influence[dx+r][dy+r]);
+                }
+            }
+        }
+    }
+
     void print() const {
         for (int i = 0; i < h; i++) {
             for (int j = 0; j < w; j++) {
@@ -93,13 +132,12 @@ struct PathfindingMap {
 };
     
 struct Pathfinder {
-    MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, PathfindingMap& costs) const {
+    MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) const {
         int w = values.w;
         int h = values.h;
         vector<vector<double> > cost(w, vector<double>(h, numeric_limits<double>::infinity()));
         vector<vector<Position> > parent(w, vector<Position>(h));
     
-        cost[from.get_x()][from.get_y()] = 0;
         priority_queue<PathfindingEntry> pq;
         int dx[8]={1,1,1,0,0,-1,-1,-1};
         int dy[8]={1,0,-1,1,-1,1,0,-1};
@@ -107,8 +145,10 @@ struct Pathfinder {
             return values.weights[pos.x][pos.y] / (cost[pos.x][pos.y] + 1.0);
         };
         Position bestPosition(from.get_x(), from.get_y());
+        cost[from.get_x()][from.get_y()] = costs.weights[from.get_x()][from.get_y()];
         auto bestScore = averageScore(bestPosition);
         pq.push(PathfindingEntry(0.0, bestPosition));
+        cost[from.get_x()][from.get_y()] = 0;
     
         while (!pq.empty()) {
             auto currentEntry = pq.top();
