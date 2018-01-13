@@ -157,6 +157,7 @@ struct BotUnit {
 struct State {
     map<UnitType, int> typeCount;
     double remainingKarboniteOnEarth;
+    int totalRobotDamage;
 } state;
 
 struct MacroObject {
@@ -413,7 +414,14 @@ struct BotFactory : BotUnit {
             });
         }
         if (gc.can_produce_robot(id, Healer)){
-            double score = 20.0 / (1.0 + state.typeCount[Healer]);
+            double score = 0.0;
+            if (state.typeCount[Ranger] > 3) {
+                score += 2.5;
+            }
+            if (state.totalRobotDamage > 200) {
+                score += 4.0;
+            }
+            score /= state.typeCount[Healer];
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
                 if (gc.can_produce_robot(id, Healer)) {
                     gc.produce_robot(id, Healer);
@@ -502,8 +510,12 @@ int main() {
 
         macroObjects.clear();
         state = State();
+        state.totalRobotDamage = 0;
         for (auto& unit : ourUnits) {
             state.typeCount[unit.get_unit_type()]++;
+            if (is_robot(unit.get_unit_type())) {
+                state.totalRobotDamage += unit.get_max_health() - unit.get_health();
+            }
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
         
@@ -557,9 +569,6 @@ int main() {
             botUnit.tick();
         }
         sort(macroObjects.rbegin(), macroObjects.rend());
-        if (macroObjects.size() > 0) {
-            cout << "Best score: " << macroObjects[0].score << endl;
-        }
         bool failedPaying = false;
         for (auto& macroObject : macroObjects) {
             if (macroObject.score <= 0) {
