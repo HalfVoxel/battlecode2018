@@ -227,18 +227,26 @@ struct BotUnit {
     virtual PathfindingMap getTargetMap() { return PathfindingMap(); }
     virtual PathfindingMap getCostMap() { return PathfindingMap(); }
 
-    MapLocation getNextLocation() {
+    MapLocation getNextLocation(MapLocation from, bool allowStay) {
         auto targetMap = getTargetMap();
         auto costMap = getCostMap();
-        auto unitMapLocation = unit.get_location().get_map_location();
-        auto planet = unitMapLocation.get_planet();
-        auto tmpLocationPenalty = planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()];
-        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 0;
+        auto planet = from.get_planet();
+        auto tmpLocationPenalty = planetPassableMap[planet].weights[from.get_x()][from.get_y()];
+        if (allowStay) {
+            planetPassableMap[planet].weights[from.get_x()][from.get_y()] = 0;
+        }
+        else {
+            planetPassableMap[planet].weights[from.get_x()][from.get_y()] = numeric_limits<double>::infinity();
+        }
         Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, targetMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
-        planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = tmpLocationPenalty;
+        auto nextLocation = pathfinder.getNextLocation(from, targetMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
+        planetPassableMap[planet].weights[from.get_x()][from.get_y()] = tmpLocationPenalty;
 
         return nextLocation;
+    }
+
+    MapLocation getNextLocation() {
+        return getNextLocation(unit.get_location().get_map_location(), true);
     }
 
     void moveToLocation(MapLocation nextLocation) {
@@ -261,9 +269,20 @@ struct BotUnit {
         }
     }
 
+    bool unloadFrontUnit() {
+        BotUnit* u = unitMap[unit.get_structure_garrison()[0]];
+        auto nextLocation = u->getNextLocation(unit.get_location().get_map_location(), false);
+        Direction dir = unit.get_location().get_map_location().direction_to(nextLocation);
+        if (gc.can_unload(id, dir)){
+            gc.unload(id, dir);
+            invalidate_units();
+            return true;
+        }
+        return false;
+    }
+
     PathfindingMap defaultMilitaryTargetMap() {
-        auto unitMapLocation = unit.get_location().get_map_location();
-        auto planet = unitMapLocation.get_planet();
+        auto planet = gc.get_planet();
         auto& planetMap = gc.get_starting_planet(planet);
         int w = planetMap.get_width();
         int h = planetMap.get_height();
@@ -591,9 +610,7 @@ struct BotHealer : BotUnit {
     BotHealer(const Unit& unit) : BotUnit(unit) {}
 
     PathfindingMap getTargetMap() {
-        auto unitMapLocation = unit.get_location().get_map_location();
-        auto planet = unitMapLocation.get_planet();
-        auto& planetMap = gc.get_starting_planet(planet);
+        auto& planetMap = gc.get_starting_planet(gc.get_planet());
         int w = planetMap.get_width();
         int h = planetMap.get_height();
         PathfindingMap damagedRobotMap(w, h);
@@ -639,9 +656,7 @@ struct BotHealer : BotUnit {
     }
 
     PathfindingMap getCostMap() {
-        auto unitMapLocation = unit.get_location().get_map_location();
-        auto planet = unitMapLocation.get_planet();
-        auto& planetMap = gc.get_starting_planet(planet);
+        auto& planetMap = gc.get_starting_planet(gc.get_planet());
         int w = planetMap.get_width();
         int h = planetMap.get_height();
         PathfindingMap healerProximityMap(w, h);
@@ -666,7 +681,7 @@ struct BotHealer : BotUnit {
             }
         }
         
-        return planetPassableMap[planet] + healerProximityMap + enemyInfluenceMap;
+        return planetPassableMap[gc.get_planet()] + healerProximityMap + enemyInfluenceMap;
     }
 
     void tick() {
@@ -721,10 +736,9 @@ struct BotFactory : BotUnit {
 
     void tick() {
         auto garrison = unit.get_structure_garrison();
-        if (garrison.size() > 0){
-            Direction dir = (Direction) (rand() % 8);
-            if (gc.can_unload(id, dir)){
-                gc.unload(id, dir);
+        for (size_t i = 0; i < garrison.size(); i++) {
+            if (!unloadFrontUnit()) {
+                break;
             }
         }
         if (gc.can_produce_robot(id, Ranger)){
@@ -861,12 +875,11 @@ struct BotRocket : BotUnit {
         if (!unit.structure_is_built()) {
             return;
         }
-        if(unit.get_location().get_map_location().get_planet() == Mars) {
+        if(gc.get_planet() == Mars) {
             auto garrison = unit.get_structure_garrison();
-            if (garrison.size() > 0){
-                Direction dir = (Direction) (rand() % 8);
-                if (gc.can_unload(id, dir)){
-                    gc.unload(id, dir);
+            for (size_t i = 0; i < garrison.size(); i++) {
+                if (!unloadFrontUnit()) {
+                    break;
                 }
             }
         } else {
