@@ -61,7 +61,6 @@ void attack_all_in_range(const Unit& unit) {
     const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
 
     const Unit* best_unit = nullptr;
-    float best_value = -1;
     float totalWeight = 0;
 
     auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
@@ -80,7 +79,6 @@ void attack_all_in_range(const Unit& unit) {
         totalWeight += value;
         if (((rand() % 100000)/100000.0f) * totalWeight <= value) {
             best_unit = &place;
-            best_value = value;
         }
     }
 
@@ -122,16 +120,33 @@ struct BotUnit {
     virtual void tick() {}
 
     void default_military_behaviour() {
-        Unit* closest_unit = nullptr;
-        float closest_dist = 100000;
+
+        auto unitMapLocation = unit.get_location().get_map_location();
+        auto planet = unitMapLocation.get_planet();
+        auto& planetMap = gc.get_starting_planet(planet);
+        int w = planetMap.get_width();
+        int h = planetMap.get_height();
+        PathfindingMap targetMap(w, h);
 
         for (auto& enemy : enemyUnits) {
             if (enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
-                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
-                if (dist < closest_dist) {
-                    closest_unit = &enemy;
-                    closest_dist = dist;
+                int r = 8;
+                for (int i = max(0, pos.get_x()-r); i < w && i <= pos.get_x()+r; i++) {
+                    for (int j = max(0, pos.get_y()-r); j < h && j <= pos.get_y()+r; j++) {
+                        int dx = i - pos.get_x();
+                        int dy = j - pos.get_y();
+                        unsigned dis2 = dx*dx + dy*dy;
+                        if (unit.get_unit_type() == Ranger && dis2 <= unit.get_ranger_cannot_attack_range()) {
+                            continue;
+                        }
+                        if (dis2 > unit.get_attack_range()) {
+                            continue;
+                        }
+                        double score = dis2 * 0.1;
+                        targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], score);
+
+                    }
                 }
             }
         }
@@ -140,18 +155,43 @@ struct BotUnit {
         for (auto& enemy : initial_units) {
             if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
-                auto dist = pos.distance_squared_to(unit.get_location().get_map_location());
-                if (dist < closest_dist) {
-                    closest_unit = &enemy;
-                    closest_dist = dist;
+                targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], 0.01);
+            }
+        }
+
+        if (unit.get_health() < unit.get_max_health()) {
+            for (auto& u : ourUnits) {
+                if (u.get_unit_type() == Healer) {
+                    if (!u.get_location().is_on_map()) {
+                        continue;
+                    }
+                    auto pos = u.get_location().get_map_location();
+                    int r = 6;
+                    for (int i = max(0, pos.get_x()-r); i < w && i <= pos.get_x()+r; i++) {
+                        for (int j = max(0, pos.get_y()-r); j < h && j <= pos.get_y()+r; j++) {
+                            int dx = i - pos.get_x();
+                            int dy = j - pos.get_y();
+                            unsigned dis2 = dx*dx + dy*dy;
+                            if (dis2 > u.get_attack_range()) {
+                                continue;
+                            }
+                            double score = 10;
+                            targetMap.weights[pos.get_x()][pos.get_y()] += score;
+
+                        }
+                    }
                 }
             }
         }
 
-        if (closest_unit != nullptr) {
-            auto p = closest_unit->get_location().get_map_location();
-            move_with_pathfinding_to(unit, p);
-            unit = gc.get_unit(unit.get_id());
+        Pathfinder pathfinder;
+        auto nextLocation = pathfinder.getNextLocation(unitMapLocation, targetMap, planetPassableMap[planet]);
+
+        if (nextLocation != unitMapLocation) {
+            auto d = unitMapLocation.direction_to(nextLocation);
+            if (gc.can_move(id,d) && gc.is_move_ready(id)){
+                gc.move_robot(id,d);
+            }
         }
 
         attack_all_in_range(unit);
@@ -173,12 +213,12 @@ struct State {
 
 struct MacroObject {
     double score;
-    int cost;
+    unsigned cost;
     int priority;
     int rnd;
     function<void()> lambda;
 
-    MacroObject(double _score, int _cost, int _priority, function<void()> _lambda) {
+    MacroObject(double _score, unsigned _cost, int _priority, function<void()> _lambda) {
         score = _score;
         cost = _cost;
         priority = _priority;
@@ -381,7 +421,6 @@ struct BotHealer : BotUnit {
                     }
                 }
 
-                auto distance = u.get_location().get_map_location().distance_squared_to(unitMapLocation);
                 if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
                     gc.heal(id, u.get_id());
                 }
