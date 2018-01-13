@@ -27,7 +27,7 @@ PathfindingMap fuzzyKarboniteMap;
 PathfindingMap enemyInfluenceMap;
 PathfindingMap workerProximityMap;
 PathfindingMap damagedStructureMap;
-map<Planet, PathfindingMap> planetPassableMap;
+PathfindingMap passableMap;
 void invalidate_units();
 struct BotUnit;
 map<unsigned int, BotUnit*> unitMap;
@@ -211,7 +211,7 @@ void move_with_pathfinding_to(const Unit& unit, MapLocation target) {
     rewardMap.weights[target.get_x()][target.get_y()] = 1;
 
     Pathfinder pathfinder;
-    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, planetPassableMap[planet]);
+    auto nextLocation = pathfinder.getNextLocation(unitMapLocation, rewardMap, passableMap);
 
     if (nextLocation != unitMapLocation) {
         auto d = unitMapLocation.direction_to(nextLocation);
@@ -229,20 +229,27 @@ struct BotUnit {
     virtual PathfindingMap getTargetMap() { return PathfindingMap(); }
     virtual PathfindingMap getCostMap() { return PathfindingMap(); }
 
-    MapLocation getNextLocation(MapLocation from, bool allowStay) {
+    MapLocation getNextLocation(MapLocation from, bool allowStructures) {
         auto targetMap = getTargetMap();
         auto costMap = getCostMap();
-        auto planet = from.get_planet();
-        auto tmpLocationPenalty = planetPassableMap[planet].weights[from.get_x()][from.get_y()];
-        if (allowStay) {
-            planetPassableMap[planet].weights[from.get_x()][from.get_y()] = 0;
-        }
-        else {
-            planetPassableMap[planet].weights[from.get_x()][from.get_y()] = numeric_limits<double>::infinity();
+        if (!allowStructures) {
+            int x = from.get_x();
+            int y = from.get_y();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx >= 0 && ny >= 0 && nx < (int)costMap.weights.size() && ny < (int)costMap.weights[nx].size()) {
+                        MapLocation location(gc.get_planet(), nx, ny);
+                        if (gc.can_sense_location(location) && gc.has_unit_at_location(location)) {
+                            costMap.weights[nx][ny] = numeric_limits<double>::infinity();
+                        }
+                    }
+                }
+            }
         }
         Pathfinder pathfinder;
-        auto nextLocation = pathfinder.getNextLocation(from, targetMap, planetPassableMap[planet] + enemyInfluenceMap + workerProximityMap);
-        planetPassableMap[planet].weights[from.get_x()][from.get_y()] = tmpLocationPenalty;
+        auto nextLocation = pathfinder.getNextLocation(from, targetMap, costMap);
 
         return nextLocation;
     }
@@ -257,16 +264,16 @@ struct BotUnit {
             auto d = unitMapLocation.direction_to(nextLocation);
             if (gc.is_move_ready(id)) {
                 if (gc.can_move(id, d)) {
-                    planetPassableMap[gc.get_planet()].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
+                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                     gc.move_robot(id,d);
                     invalidate_units();
-                    planetPassableMap[gc.get_planet()].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
                 }
                 else if(gc.has_unit_at_location(nextLocation)) {
                     auto u = gc.sense_unit_at_location(nextLocation);
                     if (u.get_team() == unit.get_team() && (u.get_unit_type() == Factory || u.get_unit_type() == Rocket)) {
                         if (gc.can_load(u.get_id(), unit.get_id())) {
-                            planetPassableMap[gc.get_planet()].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
+                            passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                             gc.load(u.get_id(), unit.get_id());
                             invalidate_units();
                         }
@@ -334,7 +341,7 @@ struct BotUnit {
     }
 
     PathfindingMap defaultMilitaryCostMap () {
-        return planetPassableMap[gc.get_planet()] + enemyInfluenceMap;
+        return passableMap + enemyInfluenceMap;
     }
 
     void default_military_behaviour() {
@@ -439,7 +446,7 @@ struct BotWorker : BotUnit {
     }
         
     PathfindingMap getCostMap() {
-        return planetPassableMap[gc.get_planet()] + enemyInfluenceMap + workerProximityMap;
+        return passableMap + enemyInfluenceMap + workerProximityMap;
     }
 
     void tick() {
@@ -688,7 +695,7 @@ struct BotHealer : BotUnit {
             }
         }
         
-        return planetPassableMap[gc.get_planet()] + healerProximityMap + enemyInfluenceMap;
+        return passableMap + healerProximityMap + enemyInfluenceMap;
     }
 
     void tick() {
@@ -1180,37 +1187,31 @@ int main() {
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
 
-        Planet planets[] = { Earth, Mars };
-        for (int p = 0; p < 2; ++p) {
-            auto& planetMap = gc.get_starting_planet(planets[p]);
-            int w = planetMap.get_width();
-            int h = planetMap.get_height();
-            PathfindingMap passableMap(w, h);
-            for (int i = 0; i < w; i++) {
-                for (int j = 0; j < h; j++) {
-                    auto location = MapLocation(planets[p], i, j);
-					if (planetMap.is_passable_terrain_at(location)) {
-                        passableMap.weights[i][j] = 1.0;
-                    }
-                    else {
-                        passableMap.weights[i][j] = numeric_limits<double>::infinity();
-                    }
+        auto& planetMap = gc.get_starting_planet(gc.get_planet());
+        int w = planetMap.get_width();
+        int h = planetMap.get_height();
+        passableMap = PathfindingMap(w, h);
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                auto location = MapLocation(gc.get_planet(), i, j);
+				if (planetMap.is_passable_terrain_at(location)) {
+                    passableMap.weights[i][j] = 1.0;
+                }
+                else {
+                    passableMap.weights[i][j] = numeric_limits<double>::infinity();
                 }
             }
-            planetPassableMap[planets[p]] = passableMap;
         }
 
         for (const auto unit : enemyUnits) {
             auto unitMapLocation = unit.get_location().get_map_location();
-            auto planet = unitMapLocation.get_planet();
-            planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+            passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
         }
 
         for (const auto unit : ourUnits) {
-            if (unit.get_unit_type() != Factory && unit.get_unit_type() != Rocket && unit.get_location().is_on_map()) {
+            if (is_robot(unit.get_unit_type()) && unit.get_location().is_on_map()) {
                 auto unitMapLocation = unit.get_location().get_map_location();
-                auto planet = unitMapLocation.get_planet();
-                planetPassableMap[planet].weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+                passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
             }
         }
 
