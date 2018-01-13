@@ -944,6 +944,10 @@ int main() {
 
     // loop through the whole game.
     while (true) {
+        unsigned round = gc.get_round();
+        printf("Round: %d\n", round);
+
+        find_units();
 
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
