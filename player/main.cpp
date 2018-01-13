@@ -324,7 +324,13 @@ struct BotUnit {
 /** Call if our units may have been changed in some way, e.g damaged by Mage splash damage and killed */
 void invalidate_units() {
     for (auto& unit : ourUnits) {
-        unitMap[unit.get_id()]->unit = gc.get_unit(unit.get_id());
+        if (gc.has_unit(unit.get_id())) {
+            unitMap[unit.get_id()]->unit = gc.get_unit(unit.get_id());
+        } else {
+            unitMap[unit.get_id()] = nullptr;
+            // Unit has suddenly disappeared, oh noes!
+            // Maybe it went into space or something
+        }
     }
 }
 
@@ -1124,8 +1130,12 @@ int main() {
         }
 
         for (const auto unit : ourUnits) {
-            unitMap[unit.get_id()]->tick();
+            auto botunit = unitMap[unit.get_id()];
+            if (botunit != nullptr) {
+                botunit->tick();
+            }
         }
+
         sort(macroObjects.rbegin(), macroObjects.rend());
         bool failedPaying = false;
         for (auto& macroObject : macroObjects) {
