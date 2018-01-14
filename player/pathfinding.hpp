@@ -193,6 +193,19 @@ struct PathfindingMap {
         }
     }
 
+    void maxInfluenceMultiple(vector<vector<double> > influence, int x0, int y0, double factor) {
+        int r = influence.size() / 2;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                int x = x0 + dx;
+                int y = y0 + dy; 
+                if (x >= 0 && y >= 0 && x < w && y < h) {
+                    weights[x][y] = max(weights[x][y], influence[dx+r][dy+r] * factor);
+                }
+            }
+        }
+    }
+
     void print() const {
         for (int i = 0; i < h; i++) {
             for (int j = 0; j < w; j++) {

@@ -36,6 +36,7 @@ vector<vector<double> > wideEnemyInfluence;
 vector<vector<double> > rangerTargetInfluence;
 vector<vector<double> > enemyRangerTargetInfluence;
 vector<vector<double> > mageTargetInfluence;
+vector<vector<double> > healerTargetInfluence;
 vector<vector<double> > knightTargetInfluence;
 vector<vector<double> > healerProximityInfluence;
 vector<vector<double> > healerInfluence;
@@ -82,12 +83,24 @@ void initInfluence() {
         }
     }
     
-    r = 10;
+    r = 12;
     wideEnemyInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            wideEnemyInfluence[dx+r][dy+r] = 1.0 / (50 + dis2);
+            wideEnemyInfluence[dx+r][dy+r] = 50.0 / (50 + dis2);
+        }
+    }
+    
+    r = 6;
+    healerTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 > 30) {
+                continue;
+            }
+            healerTargetInfluence[dx+r][dy+r] = 1;
         }
     }
     
@@ -470,7 +483,7 @@ struct BotWorker : BotUnit {
 
 
     PathfindingMap getTargetMap() {
-        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap;
+        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap + 0.01;
         if (unit.get_health() < unit.get_max_health()) {
             for (auto& u : ourUnits) {
                 if (u.get_unit_type() == Healer) {
@@ -496,7 +509,7 @@ struct BotWorker : BotUnit {
     }
         
     PathfindingMap getCostMap() {
-        return (passableMap/(fuzzyKarboniteMap + 20.0)) + enemyInfluenceMap + workerProximityMap;
+        return (passableMap/(fuzzyKarboniteMap + 20.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap;
     }
 
     void tick() {
@@ -694,15 +707,7 @@ struct BotHealer : BotUnit {
                     
                 auto uMapLocation = u.get_location().get_map_location();
 
-                for (int i = 0; i < 8; i++) {
-                    Direction d = (Direction) i;
-                    auto location = u.get_location().get_map_location().add(d);
-                    int x = location.get_x();
-                    int y = location.get_y();
-                    if (x >= 0 && x < w && y >= 0 && y < h) {
-                        damagedRobotMap.weights[x][y] = max(damagedRobotMap.weights[x][y], 15 * (2.0 - remainingLife));
-                    }
-                }
+                targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 15 * (2.0 - remainingLife));
             }
         }
         
