@@ -47,6 +47,7 @@ vector<vector<double> > rocketProximityInfluence;
 vector<vector<double> > rangerProximityInfluence;
 double averageHealerSuccessRate;
 map<unsigned, vector<unsigned> > unitShouldGoToRocket;
+int launchedWorkerCount;
 
 void initInfluence() {
     int r = 7;
@@ -154,7 +155,7 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            workerProximityInfluence[dx+r][dy+r] = 0.1 / (1.0 + dis2);
+            workerProximityInfluence[dx+r][dy+r] = 0.05 / (1.0 + dis2);
         }
     }
     
@@ -609,7 +610,7 @@ struct BotWorker : BotUnit {
 
 
     PathfindingMap getTargetMap() {
-        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap - (workerProximityMap - 1.0) * 0.01;
+        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap - enemyNearbyMap * 1.0 + 0.01;
         if (unit.get_health() < unit.get_max_health()) {
             for (auto& u : ourUnits) {
                 if (u.get_unit_type() == Healer) {
@@ -717,6 +718,9 @@ struct BotWorker : BotUnit {
                     double factor = 0.01;
                     if (gc.get_round() > 600) {
                         factor = 0.5;
+                    }
+                    if (!launchedWorkerCount && !state.typeCount[Rocket]) {
+                        factor += 0.5;
                     }
                     double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
@@ -1133,14 +1137,20 @@ struct BotRocket : BotUnit {
                 }
             }
         } else {
-            if (unit.get_structure_garrison().size() == unit.get_structure_max_capacity() || gc.get_round() == 749) {
+            int workerCount = 0;
+            for (auto u : unit.get_structure_garrison()) {
+                if (gc.get_unit(u).get_unit_type() == Worker) {
+                    ++workerCount;
+                }
+            }
+            if (unit.get_structure_garrison().size() == unit.get_structure_max_capacity() || gc.get_round() == 749 || (workerCount && !launchedWorkerCount)) {
                 auto res = find_best_landing_spot();
                 if (res.first) {
                     if (gc.can_launch_rocket(unit.get_id(), res.second)) {
                         invalidate_units();
                         gc.launch_rocket(unit.get_id(), res.second);
                         invalidate_units();
-//                    if (gc.can_launch_rocket(unit.get_id(), location)) {
+                        launchedWorkerCount += workerCount;
                     }
                 }
             }
@@ -1161,8 +1171,8 @@ void selectTravellersForRocket(Unit& unit) {
 	}
     bool hasWorker = false;
     for (auto id : unit.get_structure_garrison()) {
-        auto unit = gc.get_unit(id);
-        if (unit.get_unit_type() == Worker) {
+        auto u = gc.get_unit(id);
+        if (u.get_unit_type() == Worker) {
             hasWorker = true;
         }
     }
@@ -1186,9 +1196,9 @@ void selectTravellersForRocket(Unit& unit) {
     sort(candidates.begin(), candidates.end());
     for (int i = 0; i < min((int) candidates.size(), remainingTravellers); i++) {
         if (gc.get_unit(candidates[i].second).get_unit_type() == Worker) {
-            if (hasWorker) {
+            /*if (hasWorker) {
                 continue;
-            }
+            }*/
             hasWorker = true;
         }
         unitShouldGoToRocket[candidates[i].second].push_back(unit.get_id());
@@ -1380,7 +1390,11 @@ int main() {
                         int x = i+k;
                         int y = j+l;
                         if (x >= 0 && y >= 0 && x < w && y < w){
-                            fuzzyKarboniteMap.weights[i][j] = max(fuzzyKarboniteMap.weights[i][j], karboniteMap.weights[x][y]);
+                            double kar = karboniteMap.weights[x][y];
+                            kar = log(kar + 1);
+                            if (k != 0 || l != 0)
+                                kar *= 0.9;
+                            fuzzyKarboniteMap.weights[i][j] = max(fuzzyKarboniteMap.weights[i][j], kar);
                         }
                     }
                 }
@@ -1437,11 +1451,14 @@ int main() {
                     int x = location.get_x();
                     int y = location.get_y();
                     if (x >= 0 && x < w && y >= 0 && y < h) {
+                        if (gc.has_unit_at_location(location) && is_structure(gc.sense_unit_at_location(location).get_unit_type())) {
+                            continue;
+                        }
                         if (unit.structure_is_built()) {
-                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 15 * (2.0 - remainingLife));
+                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 2 * (2.0 - remainingLife));
                         }
                         else {
-                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 30 * (1.5 + remainingLife));
+                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 3 * (1.5 + remainingLife));
                         }
                     }
                 }
@@ -1488,9 +1505,14 @@ int main() {
         }
 
         for (const auto unit : ourUnits) {
-            if (is_robot(unit.get_unit_type()) && unit.get_location().is_on_map()) {
+            if (unit.get_location().is_on_map()) {
                 auto unitMapLocation = unit.get_location().get_map_location();
-                passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+                if (is_robot(unit.get_unit_type())) {
+                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+                }
+                else {
+                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1.5;
+                }
             }
         }
 
