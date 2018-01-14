@@ -53,7 +53,7 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            if (dis2 < 10) {
+            if (dis2 <= 10) {
                 continue;
             }
             if (dis2 > 50) {
@@ -70,7 +70,7 @@ void initInfluence() {
             int x = abs(dx)+1;
             int y = abs(dy)+1;
             int dis2 = x*x + y*y;
-            if (dis2 < 10) {
+            if (dis2 <= 10) {
                 continue;
             }
             x = max(0, abs(dx)-1);
@@ -153,7 +153,7 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            workerProximityInfluence[dx+r][dy+r] = 0.7 / (1.0 + dis2);
+            workerProximityInfluence[dx+r][dy+r] = 0.1 / (1.0 + dis2);
         }
     }
     
@@ -171,9 +171,9 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            factoryProximityInfluence[dx+r][dy+r] = 0.5 / (1.0 + dis2);
-            if (dis2 == 1) {
-                factoryProximityInfluence[dx+r][dy+r] = 3.0;
+            factoryProximityInfluence[dx+r][dy+r] = 0.1 / (1.0 + dis2);
+            if (dis2 <= 2) {
+                factoryProximityInfluence[dx+r][dy+r] = 0.4;
             }
         }
     }
@@ -183,9 +183,9 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            rocketProximityInfluence[dx+r][dy+r] = 1.0 / (1.0 + dis2);
+            rocketProximityInfluence[dx+r][dy+r] = 0.1 / (1.0 + dis2);
             if (dis2 == 1) {
-                rocketProximityInfluence[dx+r][dy+r] = 5.0;
+                rocketProximityInfluence[dx+r][dy+r] = 0.2;
             }
         }
     }
@@ -258,6 +258,7 @@ void attack_all_in_range(const Unit& unit) {
 struct BotUnit {
     Unit unit;
     const unsigned id;
+    double pathfindingScore;
     BotUnit(const Unit& unit) : unit(unit), id(unit.get_id()) {}
     virtual void tick() {}
     virtual PathfindingMap getTargetMap() { return PathfindingMap(); }
@@ -272,6 +273,7 @@ struct BotUnit {
             costMap.weights[x][y] = 1;
         }
         else {
+            costMap.weights[x][y] = numeric_limits<double>::infinity();
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     int nx = x + dx;
@@ -287,6 +289,7 @@ struct BotUnit {
         }
         Pathfinder pathfinder;
         auto nextLocation = pathfinder.getNextLocation(from, targetMap, costMap);
+        pathfindingScore = pathfinder.bestScore;
 
         return nextLocation;
     }
@@ -483,7 +486,7 @@ struct BotWorker : BotUnit {
 
 
     PathfindingMap getTargetMap() {
-        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap + 0.01;
+        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap - (workerProximityMap - 1.0) * 0.01;
         if (unit.get_health() < unit.get_max_health()) {
             for (auto& u : ourUnits) {
                 if (u.get_unit_type() == Healer) {
@@ -509,7 +512,7 @@ struct BotWorker : BotUnit {
     }
         
     PathfindingMap getCostMap() {
-        return (passableMap/(fuzzyKarboniteMap + 20.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap;
+        return ((passableMap * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap;
     }
 
     void tick() {
@@ -602,6 +605,7 @@ struct BotWorker : BotUnit {
             if(gc.can_replicate(id, d)) {
                 macroObjects.emplace_back(replicateScore, unit_type_get_replicate_cost(), 2, [=]{
                     if(gc.can_replicate(id, d)) {
+                        cout << "Bad replicate" << endl;
                         gc.replicate(id, d);
                     }
                 });
@@ -613,12 +617,11 @@ struct BotWorker : BotUnit {
         
         if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
             unitMapLocation = nextLocation;
-            Pathfinder pathfinder;
-            nextLocation = getNextLocation();
+            nextLocation = getNextLocation(unitMapLocation, false);
 
             if (nextLocation != unitMapLocation) {
                 auto d = unitMapLocation.direction_to(nextLocation);
-                double score = replicateScore + 0.1 * log(1.0 + pathfinder.bestScore);
+                double score = replicateScore + 0.001 * log(1.1 + pathfindingScore);
                 macroObjects.emplace_back(score, unit_type_get_replicate_cost(), 2, [=]{
                     if(gc.can_replicate(id, d)) {
                         gc.replicate(id, d);
@@ -1218,15 +1221,15 @@ int main() {
             if (u.get_location().is_on_map()) {
                 if (u.get_unit_type() == Worker) {
                     auto pos = u.get_location().get_map_location();
-                    workerProximityMap.addInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
+                    workerProximityMap.maxInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
                 }
                 if (u.get_unit_type() == Factory && u.structure_is_built()) {
                     auto pos = u.get_location().get_map_location();
-                    workerProximityMap.addInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
+                    workerProximityMap.maxInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
                 }
                 if (u.get_unit_type() == Rocket && u.structure_is_built()) {
                     auto pos = u.get_location().get_map_location();
-                    workerProximityMap.addInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
+                    workerProximityMap.maxInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
                 }
             }
         }
