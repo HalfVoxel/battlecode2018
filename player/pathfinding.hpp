@@ -144,6 +144,14 @@ struct PathfindingMap {
         return ret;
     }
 
+    void operator*= (double factor) {
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                weights[i][j] *= factor;
+            }
+        }
+    }
+
     double sum() const {
         double ret = 0.0;
         for (int i = 0; i < h; i++) {

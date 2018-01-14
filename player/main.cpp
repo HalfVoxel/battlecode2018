@@ -29,6 +29,7 @@ PathfindingMap workerProximityMap;
 PathfindingMap damagedStructureMap;
 PathfindingMap passableMap;
 PathfindingMap enemyNearbyMap;
+PathfindingMap enemyPositionMap;
 void invalidate_units();
 struct BotUnit;
 map<unsigned int, BotUnit*> unitMap;
@@ -497,6 +498,31 @@ struct BotUnit {
 
     void default_military_behaviour() {
 
+        if (unit.get_unit_type() == Ranger) {
+            if (!unit.ranger_is_sniping() && unit.get_location().is_on_map() && gc.can_begin_snipe(unit.get_id(), unit.get_location().get_map_location()) && unit.get_ability_heat() < 10) {
+                auto location = unit.get_location().get_map_location();
+                if (enemyNearbyMap.weights[location.get_x()][location.get_y()] == 0) { // Only shoot if we feel safe
+                    double totalWeight = enemyPositionMap.sum();
+                    double r = (rand()%1000)/1000.0 * totalWeight;
+                    auto& planetMap = gc.get_starting_planet(gc.get_planet());
+                    int w = planetMap.get_width();
+                    int h = planetMap.get_height();
+                    for (int x = 0; x < w; ++x) {
+                        for (int y = 0; y < h; ++y) {
+                            r -= enemyPositionMap.weights[x][y];
+                            if (r < 0) {
+                                if (gc.can_begin_snipe(unit.get_id(), MapLocation(gc.get_planet(), x, y))) {
+                                    cout << "Sniping" << endl;
+                                    gc.begin_snipe(unit.get_id(), MapLocation(gc.get_planet(), x, y));
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (unit.get_unit_type() == Mage) {
             mage_attack(unit);
         }
@@ -504,8 +530,10 @@ struct BotUnit {
             attack_all_in_range(unit);
         }
 
-        auto nextLocation = getNextLocation();
-        moveToLocation(nextLocation);
+        if (gc.is_move_ready(unit.get_id())) {
+            auto nextLocation = getNextLocation();
+            moveToLocation(nextLocation);
+        }
 
         if (unit.get_unit_type() == Mage) {
             mage_attack(unit);
@@ -709,8 +737,12 @@ struct BotWorker : BotUnit {
             }
         }
 
-        auto nextLocation = getNextLocation();
-        moveToLocation(nextLocation);
+        auto nextLocation = unitMapLocation;
+        
+        if (gc.is_move_ready(unit.get_id())) {
+            auto nextLocation = getNextLocation();
+            moveToLocation(nextLocation);
+        }
         
         if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
             unitMapLocation = nextLocation;
@@ -827,7 +859,7 @@ struct BotHealer : BotUnit {
         }
 
 
-        return damagedRobotMap + targetMap;
+        return damagedRobotMap / (enemyNearbyMap + 1.0) + targetMap;
     }
 
     PathfindingMap getCostMap() {
@@ -1175,6 +1207,9 @@ struct Researcher {
             case 1: 
                 scores[Ranger] = 5 + 0.1 * state.typeCount[Ranger];
                 break;
+            case 2:
+                scores[Ranger] = 3 + 0.1 * state.typeCount[Ranger];
+                break;
         }
         switch(researchInfo.get_level(Healer)) {
             case 0: 
@@ -1273,6 +1308,7 @@ int main() {
     initInfluence();
             
     Researcher researcher;
+    enemyPositionMap = PathfindingMap(w, h);
 
     // loop through the whole game.
     while (true) {
@@ -1290,12 +1326,48 @@ int main() {
             }
         }
 
+        PathfindingMap newEnemyPositionMap(w, h);
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                int cnt = 0;
+                for (int k = -1; k <= 1; k++) {
+                    for (int l = -1; l <= 1; l++) {
+                        int x = i+k;
+                        int y = j+l;
+                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap.is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                            ++cnt;
+                        }
+                    }
+                }
+                double weight1 = 0.8;
+                double weight2 = cnt > 1 ? 0.15 / (cnt - 1) : 0;
+                for (int k = -1; k <= 1; k++) {
+                    for (int l = -1; l <= 1; l++) {
+                        int x = i+k;
+                        int y = j+l;
+                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap.is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                            double w;
+                            if (k == 0 && l == 0) {
+                                w = weight1;
+                            }
+                            else {
+                                w = weight2;
+                            }
+                            newEnemyPositionMap.weights[x][y] += w * enemyPositionMap.weights[i][j];
+                        }
+                    }
+                }
+            }
+        }
+        enemyPositionMap = newEnemyPositionMap;
+
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
                 auto location = MapLocation(gc.get_planet(), i, j);
                 if (gc.can_sense_location(location)) {
                     int karbonite = gc.get_karbonite_at(location);
                     karboniteMap.weights[i][j] = karbonite;
+                    enemyPositionMap.weights[i][j] = 0;
                 }
             }
         }
@@ -1314,7 +1386,7 @@ int main() {
                 }
             }
         }
-        
+
         enemyInfluenceMap = PathfindingMap(w, h);
         enemyNearbyMap = PathfindingMap(w, h);
         for (auto& u : enemyUnits) {
@@ -1330,6 +1402,7 @@ int main() {
                     enemyInfluenceMap.addInfluence(knightTargetInfluence, pos.get_x(), pos.get_y());
                 }
                 enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
+                enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
             }
         }
 
@@ -1396,9 +1469,6 @@ int main() {
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
 
-        auto& planetMap = gc.get_starting_planet(gc.get_planet());
-        int w = planetMap.get_width();
-        int h = planetMap.get_height();
         passableMap = PathfindingMap(w, h);
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
