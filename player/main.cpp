@@ -217,6 +217,67 @@ float unit_strategic_value[] = {
 static_assert((int)Worker == 0, "");
 static_assert((int)Rocket == 6, "");
 
+void mage_attack(const Unit& unit) {
+    if (!gc.is_attack_ready(unit.get_id())) return;
+
+	if (!unit.get_location().is_on_map()) return;
+
+    auto planet = gc.get_planet();
+    auto& planetMap = gc.get_starting_planet(planet);
+    int w = planetMap.get_width();
+    int h = planetMap.get_height();
+    
+    // Calls on the controller take unit IDs for ownership reasons.
+    const auto locus = unit.get_location().get_map_location();
+    const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range() + 20);
+
+    const Unit* best_unit = nullptr;
+    double best_unit_score = 0;
+
+    auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
+    auto& values = low_health ? unit_defensive_strategic_value : unit_strategic_value;
+
+    auto hitScore = vector<vector<double>>(w, vector<double>(h));
+
+    for (auto& place : nearby) {
+        if (place.get_health() <= 0) continue;
+        if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
+        
+        float fractional_health = place.get_health() / (float)place.get_max_health();
+        float value = values[place.get_unit_type()] / (fractional_health + 2.0);
+        if (place.get_team() == unit.get_team()) value = -value;
+
+        auto location = place.get_location().get_map_location();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                int x = location.get_x() + dx;
+                int y = location.get_y() + dy;
+                if (x >= 0 && y >= 0 && x < w && y < h) {
+                    hitScore[x][y] += value;
+                }
+            }
+        }
+    }
+
+    for (auto& place : nearby) {
+        if (place.get_health() <= 0) continue;
+        if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
+        
+        auto location = place.get_location().get_map_location();
+        double score = hitScore[location.get_x()][location.get_y()];
+        if (score > best_unit_score) {
+            best_unit_score = score;
+            best_unit = &place;
+        }
+    }
+
+    if (best_unit != nullptr) {
+        //Attacking 'em enemies
+        gc.attack(unit.get_id(), best_unit->get_id());
+        invalidate_units();
+    }
+}
+
 void attack_all_in_range(const Unit& unit) {
     if (!gc.is_attack_ready(unit.get_id())) return;
 
@@ -326,6 +387,9 @@ struct BotUnit {
 
     bool unloadFrontUnit() {
         BotUnit* u = unitMap[unit.get_structure_garrison()[0]];
+        /*if (u->unit.get_unit_type() == Mage && (u->unit.get_movement_heat() >= 10 || u->unit.get_attack_heat() >= 10)) {
+            return false;
+        }*/
         auto nextLocation = u->getNextLocation(unit.get_location().get_map_location(), false);
         Direction dir = unit.get_location().get_map_location().direction_to(nextLocation);
         if (gc.can_unload(id, dir)){
@@ -346,7 +410,15 @@ struct BotUnit {
         for (auto& enemy : enemyUnits) {
             if (enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
-                targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                if (unit.get_unit_type() == Mage) {
+                    targetMap.maxInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
+                }
+                else if (unit.get_unit_type() == Ranger) {
+                    targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                }
+                else {
+                    targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                }
             }
         }
         
@@ -365,7 +437,19 @@ struct BotUnit {
                         continue;
                     }
                     auto pos = u.get_location().get_map_location();
-                    targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), 10);
+                    double factor = 10;
+                    if (unit.get_unit_type() == Mage) {
+                        factor = 0.1;
+                    }
+                    targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), factor);
+                }
+
+                if (u.get_unit_type() == Factory) {
+                    if (!u.get_location().is_on_map()) {
+                        continue;
+                    }
+                    auto pos = u.get_location().get_map_location();
+                    targetMap.weights[pos.get_x()][pos.get_y()] += 0.1;
                 }
             }
         }
@@ -413,12 +497,22 @@ struct BotUnit {
 
     void default_military_behaviour() {
 
-        attack_all_in_range(unit);
+        if (unit.get_unit_type() == Mage) {
+            mage_attack(unit);
+        }
+        else {
+            attack_all_in_range(unit);
+        }
 
         auto nextLocation = getNextLocation();
         moveToLocation(nextLocation);
 
-        attack_all_in_range(unit);
+        if (unit.get_unit_type() == Mage) {
+            mage_attack(unit);
+        }
+        else {
+            attack_all_in_range(unit);
+        }
     }
 };
 
@@ -854,6 +948,15 @@ struct BotFactory : BotUnit {
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
                 if (gc.can_produce_robot(id, Ranger)) {
                     gc.produce_robot(id, Ranger);
+                }
+            });
+        }
+        if (gc.can_produce_robot(id, Mage)){
+            auto location = unit.get_location().get_map_location();
+            double score = enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Mage), 2, [=] {
+                if (gc.can_produce_robot(id, Mage)) {
+                    gc.produce_robot(id, Mage);
                 }
             });
         }
