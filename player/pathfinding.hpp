@@ -118,7 +118,17 @@ struct PathfindingMap {
         PathfindingMap ret = PathfindingMap(w, h);
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
-                ret.weights[i][j] += weights[i][j] + factor;
+                ret.weights[i][j] = weights[i][j] + factor;
+            }
+        }
+        return ret;
+    }
+
+    PathfindingMap operator- (double factor) const {
+        PathfindingMap ret = PathfindingMap(w, h);
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                ret.weights[i][j] = weights[i][j] - factor;
             }
         }
         return ret;
@@ -128,7 +138,7 @@ struct PathfindingMap {
         PathfindingMap ret = PathfindingMap(w, h);
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
-                ret.weights[i][j] += weights[i][j] * factor;
+                ret.weights[i][j] = weights[i][j] * factor;
             }
         }
         return ret;
@@ -247,7 +257,7 @@ struct Pathfinder {
             if (currentEntry.cost > cost[currentPos.x][currentPos.y]) {
                 continue;
             }
-            if (valueUpperBound / (cost[currentPos.x][currentPos.y] + 1.0) <= bestScore) {
+            if (valueUpperBound / (currentEntry.cost + 1.0) <= bestScore) {
                 break;
             }
             auto currentScore = averageScore(currentPos);

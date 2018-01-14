@@ -259,7 +259,8 @@ struct BotUnit {
     Unit unit;
     const unsigned id;
     double pathfindingScore;
-    BotUnit(const Unit& unit) : unit(unit), id(unit.get_id()) {}
+    bool hasDoneTick;
+    BotUnit(const Unit& unit) : unit(unit), id(unit.get_id()), hasDoneTick(false) {}
     virtual void tick() {}
     virtual PathfindingMap getTargetMap() { return PathfindingMap(); }
     virtual PathfindingMap getCostMap() { return PathfindingMap(); }
@@ -521,6 +522,8 @@ struct BotWorker : BotUnit {
             return;
         }
 
+        hasDoneTick = true;
+
         const auto locus = unit.get_location().get_map_location();
         const auto nearby = gc.sense_nearby_units(locus, 2);
 
@@ -646,6 +649,8 @@ struct BotKnight : BotUnit {
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
+        hasDoneTick = true;
+
         default_military_behaviour();
     }
 };
@@ -664,6 +669,8 @@ struct BotRanger : BotUnit {
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
+        hasDoneTick = true;
+
         default_military_behaviour();
     }
 };
@@ -681,6 +688,8 @@ struct BotMage : BotUnit {
 
     void tick() {
         if (!unit.get_location().is_on_map()) return;
+
+        hasDoneTick = true;
 
         default_military_behaviour();
     }
@@ -759,6 +768,8 @@ struct BotHealer : BotUnit {
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
+        hasDoneTick = true;
+
         auto unitMapLocation = unit.get_location().get_map_location();
         bool succeededHealing = false;
         int bestTargetId = -1;
@@ -830,6 +841,8 @@ struct BotFactory : BotUnit {
     BotFactory(const Unit& unit) : BotUnit(unit) {}
 
     void tick() {
+
+        hasDoneTick = true;
         auto garrison = unit.get_structure_garrison();
         for (size_t i = 0; i < garrison.size(); i++) {
             if (!unloadFrontUnit()) {
@@ -976,6 +989,7 @@ struct BotRocket : BotUnit {
         if (!unit.structure_is_built()) {
             return;
         }
+        hasDoneTick = true;
         if(gc.get_planet() == Mars) {
             auto garrison = unit.get_structure_garrison();
             for (size_t i = 0; i < garrison.size(); i++) {
@@ -1307,52 +1321,68 @@ int main() {
             }
         }
 
-        for (const auto unit : ourUnits) {
-            assert(gc.has_unit(unit.get_id()));
-            const unsigned id = unit.get_id();
-            BotUnit* botUnitPtr;
+        bool firstIteration = true;
+        while (true) {
+            for (const auto unit : ourUnits) {
+                assert(gc.has_unit(unit.get_id()));
+                const unsigned id = unit.get_id();
+                BotUnit* botUnitPtr;
 
-            if (unitMap.find(id) == unitMap.end()) {
-                switch(unit.get_unit_type()) {
-                    case Worker: botUnitPtr = new BotWorker(unit); break;
-                    case Knight: botUnitPtr = new BotKnight(unit); break;
-                    case Ranger: botUnitPtr = new BotRanger(unit); break;
-                    case Mage: botUnitPtr = new BotMage(unit); break;
-                    case Healer: botUnitPtr = new BotHealer(unit); break;
-                    case Factory: botUnitPtr = new BotFactory(unit); break;
-                    case Rocket: botUnitPtr = new BotRocket(unit); break;
-                    default:
-                        cerr << "Unknown unit type!" << endl;
-                        exit(1);
+                if (unitMap.find(id) == unitMap.end()) {
+                    switch(unit.get_unit_type()) {
+                        case Worker: botUnitPtr = new BotWorker(unit); break;
+                        case Knight: botUnitPtr = new BotKnight(unit); break;
+                        case Ranger: botUnitPtr = new BotRanger(unit); break;
+                        case Mage: botUnitPtr = new BotMage(unit); break;
+                        case Healer: botUnitPtr = new BotHealer(unit); break;
+                        case Factory: botUnitPtr = new BotFactory(unit); break;
+                        case Rocket: botUnitPtr = new BotRocket(unit); break;
+                        default:
+                            cerr << "Unknown unit type!" << endl;
+                            exit(1);
+                    }
+                    unitMap[id] = botUnitPtr;
+                } else {
+                    botUnitPtr = unitMap[id];
                 }
-                unitMap[id] = botUnitPtr;
-            } else {
-                botUnitPtr = unitMap[id];
+                botUnitPtr->unit = unit;
             }
-            botUnitPtr->unit = unit;
-        }
 
-        for (const auto unit : ourUnits) {
-            auto botunit = unitMap[unit.get_id()];
-            if (botunit != nullptr) {
-                botunit->tick();
+            bool anyTickDone = false;
+            for (const auto unit : ourUnits) {
+                auto botunit = unitMap[unit.get_id()];
+                if (firstIteration) {
+                    botunit->hasDoneTick = false;
+                }
+                if (botunit != nullptr && !botunit->hasDoneTick) {
+                    botunit->tick();
+                    anyTickDone = (anyTickDone || botunit->hasDoneTick);
+                }
             }
-        }
 
-        sort(macroObjects.rbegin(), macroObjects.rend());
-        bool failedPaying = false;
-        for (auto& macroObject : macroObjects) {
-            if (macroObject.score <= 0) {
-                continue;
+            if (!anyTickDone) {
+                break;
             }
-            if (failedPaying && macroObject.cost) {
-                continue;
+        
+            find_units();
+            firstIteration = false;
+
+            sort(macroObjects.rbegin(), macroObjects.rend());
+            bool failedPaying = false;
+            for (auto& macroObject : macroObjects) {
+                if (macroObject.score <= 0) {
+                    continue;
+                }
+                if (failedPaying && macroObject.cost) {
+                    continue;
+                }
+                if (gc.get_karbonite() >= macroObject.cost) {
+                    macroObject.execute();
+                } else {
+                    failedPaying = true;
+                }
             }
-            if (gc.get_karbonite() >= macroObject.cost) {
-                macroObject.execute();
-            } else {
-                failedPaying = true;
-            }
+            macroObjects.clear();
         }
         
         auto researchInfo = gc.get_research_info();
