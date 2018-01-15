@@ -30,6 +30,7 @@ PathfindingMap damagedStructureMap;
 PathfindingMap passableMap;
 PathfindingMap enemyNearbyMap;
 PathfindingMap enemyPositionMap;
+PathfindingMap nearbyFriendMap;
 void invalidate_units();
 struct BotUnit;
 map<unsigned int, BotUnit*> unitMap;
@@ -48,6 +49,29 @@ vector<vector<double> > rangerProximityInfluence;
 double averageHealerSuccessRate;
 map<unsigned, vector<unsigned> > unitShouldGoToRocket;
 int launchedWorkerCount;
+
+enum class MapType { Target, Cost };
+
+struct MapReuseObject {
+    MapType mapType;
+    UnitType unitType;
+    bool isHurt;
+
+    MapReuseObject (MapType _mapType, UnitType _unitType, bool _isHurt) : mapType(_mapType), unitType(_unitType), isHurt(_isHurt) {
+    }
+
+    bool operator< (const MapReuseObject& other) const {
+        if (unitType != other.unitType) {
+            return unitType < other.unitType;
+        }
+        if (isHurt != other.isHurt) {
+            return isHurt < other.isHurt;
+        }
+        return 0;
+    }
+};
+
+map<MapReuseObject, PathfindingMap> reusableMaps;
 
 void initInfluence() {
     int r = 7;
@@ -165,6 +189,9 @@ void initInfluence() {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
             rangerProximityInfluence[dx+r][dy+r] = 1.0 / (1.0 + dis2);
+            if (dis2 == 0) {
+                rangerProximityInfluence[dx+r][dy+r] = 0.5;
+            }
         }
     }
     
@@ -219,16 +246,16 @@ float unit_strategic_value[] = {
 static_assert((int)Worker == 0, "");
 static_assert((int)Rocket == 6, "");
 
+Planet planet;
+const PlanetMap* planetMap;
+int w;
+int h;
+
 void mage_attack(const Unit& unit) {
     if (!gc.is_attack_ready(unit.get_id())) return;
 
 	if (!unit.get_location().is_on_map()) return;
 
-    auto planet = gc.get_planet();
-    auto& planetMap = gc.get_starting_planet(planet);
-    int w = planetMap.get_width();
-    int h = planetMap.get_height();
-    
     // Calls on the controller take unit IDs for ownership reasons.
     const auto locus = unit.get_location().get_map_location();
     const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range() + 20);
@@ -371,6 +398,7 @@ struct BotUnit {
                     passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                     gc.move_robot(id,d);
                     invalidate_units();
+                    unitMapLocation = unit.get_location().get_map_location();
                     passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
                 }
                 else if(gc.has_unit_at_location(nextLocation)) {
@@ -403,66 +431,72 @@ struct BotUnit {
     }
 
     PathfindingMap defaultMilitaryTargetMap() {
-        auto planet = gc.get_planet();
-        auto& planetMap = gc.get_starting_planet(planet);
-        int w = planetMap.get_width();
-        int h = planetMap.get_height();
-        PathfindingMap targetMap(w, h);
+        bool isHurt = (unit.get_health() < 0.8 * unit.get_max_health());
+        MapReuseObject reuseObject(MapType::Target, unit.get_unit_type(), isHurt);
 
-        for (auto& enemy : enemyUnits) {
-            if (enemy.get_location().is_on_map()) {
-                auto pos = enemy.get_location().get_map_location();
-                if (unit.get_unit_type() == Mage) {
-                    targetMap.maxInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
-                }
-                else if (unit.get_unit_type() == Ranger) {
-                    targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
-                }
-                else {
-                    targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
-                }
-            }
+        PathfindingMap targetMap;
+        if (reusableMaps.count(reuseObject)) {
+            targetMap = reusableMaps[reuseObject];
         }
-        
-        auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
-        for (auto& enemy : initial_units) {
-            if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
-                auto pos = enemy.get_location().get_map_location();
-                targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], 0.01);
-            }
-        }
+        else {
+            targetMap = PathfindingMap(w, h); 
 
-        if (unit.get_health() < 0.8 * unit.get_max_health()) {
-            for (auto& u : ourUnits) {
-                if (u.get_unit_type() == Healer) {
-                    if (!u.get_location().is_on_map()) {
-                        continue;
-                    }
-                    auto pos = u.get_location().get_map_location();
-                    double factor = 10;
+            for (auto& enemy : enemyUnits) {
+                if (enemy.get_location().is_on_map()) {
+                    auto pos = enemy.get_location().get_map_location();
                     if (unit.get_unit_type() == Mage) {
-                        factor = 0.1;
+                        targetMap.maxInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
                     }
-                    targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), factor);
+                    else if (unit.get_unit_type() == Ranger) {
+                        targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                    }
+                    else {
+                        targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                    }
                 }
-
-                if (u.get_unit_type() == Factory) {
-                    if (!u.get_location().is_on_map()) {
-                        continue;
+            }
+            
+            auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
+            for (auto& enemy : initial_units) {
+                if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
+                    auto pos = enemy.get_location().get_map_location();
+                    targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], 0.01);
+                }
+            }
+    
+            if (isHurt) {
+                for (auto& u : ourUnits) {
+                    if (u.get_unit_type() == Healer) {
+                        if (!u.get_location().is_on_map()) {
+                            continue;
+                        }
+                        auto pos = u.get_location().get_map_location();
+                        double factor = 10;
+                        if (unit.get_unit_type() == Mage) {
+                            factor = 0.1;
+                        }
+                        targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), factor);
                     }
+    
+                    if (u.get_unit_type() == Factory) {
+                        if (!u.get_location().is_on_map()) {
+                            continue;
+                        }
+                        auto pos = u.get_location().get_map_location();
+                        targetMap.weights[pos.get_x()][pos.get_y()] += 0.1;
+                    }
+                }
+            }
+    
+            for (auto& u : ourUnits) {
+                if (u.get_location().is_on_map() && is_structure(u.get_unit_type())) {
                     auto pos = u.get_location().get_map_location();
-                    targetMap.weights[pos.get_x()][pos.get_y()] += 0.1;
+                    targetMap.weights[pos.get_x()][pos.get_y()] = 0;
                 }
             }
+            reusableMaps[reuseObject] = targetMap;
         }
-
-        for (auto& u : ourUnits) {
-            if (u.get_location().is_on_map() && is_structure(u.get_unit_type())) {
-                auto pos = u.get_location().get_map_location();
-                targetMap.weights[pos.get_x()][pos.get_y()] = 0;
-            }
-        }
-        
+            
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
             auto unit = gc.get_unit(rocketId);
             if (!unit.get_location().is_on_map()) {
@@ -475,25 +509,6 @@ struct BotUnit {
     }
 
     PathfindingMap defaultMilitaryCostMap () {
-        auto planet = gc.get_planet();
-        auto& planetMap = gc.get_starting_planet(planet);
-        int w = planetMap.get_width();
-        int h = planetMap.get_height();
-        PathfindingMap nearbyFriendMap(w, h);
-
-        for (auto& u : ourUnits) {
-            if (u.get_unit_type() == Ranger) {
-                if (!u.get_location().is_on_map()) {
-                    continue;
-                }
-                if (u.get_id() == unit.get_id()) {
-                    continue;
-                }
-                auto pos = u.get_location().get_map_location();
-                nearbyFriendMap.addInfluence(rangerProximityInfluence, pos.get_x(), pos.get_y());
-            }
-        }
-
         return (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0);
     }
 
@@ -505,9 +520,6 @@ struct BotUnit {
                 if (enemyNearbyMap.weights[location.get_x()][location.get_y()] == 0) { // Only shoot if we feel safe
                     double totalWeight = enemyPositionMap.sum();
                     double r = (rand()%1000)/1000.0 * totalWeight;
-                    auto& planetMap = gc.get_starting_planet(gc.get_planet());
-                    int w = planetMap.get_width();
-                    int h = planetMap.get_height();
                     for (int x = 0; x < w; ++x) {
                         for (int y = 0; y < h; ++y) {
                             r -= enemyPositionMap.weights[x][y];
@@ -598,10 +610,6 @@ struct MacroObject {
 vector<MacroObject> macroObjects;
 
 bool isOnMap(MapLocation location) {
-   auto planet = location.get_planet();
-   auto& planetMap = gc.get_starting_planet(planet);
-   int w = planetMap.get_width();
-   int h = planetMap.get_height();
    return location.get_x() >= 0 && location.get_y() >= 0 && location.get_x() < w && location.get_y() < h;
 }
 
@@ -610,17 +618,27 @@ struct BotWorker : BotUnit {
 
 
     PathfindingMap getTargetMap() {
-        PathfindingMap targetMap = fuzzyKarboniteMap + damagedStructureMap - enemyNearbyMap * 1.0 + 0.01;
-        if (unit.get_health() < unit.get_max_health()) {
-            for (auto& u : ourUnits) {
-                if (u.get_unit_type() == Healer) {
-                    if (!u.get_location().is_on_map()) {
-                        continue;
+        bool isHurt = (unit.get_health() < unit.get_max_health());
+        MapReuseObject reuseObject(MapType::Target, unit.get_unit_type(), isHurt);
+
+        PathfindingMap targetMap;
+        if (reusableMaps.count(reuseObject)) {
+            targetMap = reusableMaps[reuseObject];
+        }
+        else {
+            targetMap = fuzzyKarboniteMap + damagedStructureMap - enemyNearbyMap * 1.0 + 0.01;
+            if (unit.get_health() < unit.get_max_health()) {
+                for (auto& u : ourUnits) {
+                    if (u.get_unit_type() == Healer) {
+                        if (!u.get_location().is_on_map()) {
+                            continue;
+                        }
+                        auto pos = u.get_location().get_map_location();
+                        targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), 10);
                     }
-                    auto pos = u.get_location().get_map_location();
-                    targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), 10);
                 }
             }
+            reusableMaps[reuseObject] = targetMap;
         }
 
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
@@ -636,7 +654,15 @@ struct BotWorker : BotUnit {
     }
         
     PathfindingMap getCostMap() {
-        return ((passableMap * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap;
+        MapReuseObject reuseObject(MapType::Cost, unit.get_unit_type(), false);
+        if (reusableMaps.count(reuseObject)) {
+            return reusableMaps[reuseObject];
+        }
+        else {
+            auto costMap = ((passableMap * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap;
+            reusableMaps[reuseObject] = costMap;
+            return costMap;
+        }
     }
 
     void tick() {
@@ -829,28 +855,34 @@ struct BotHealer : BotUnit {
     BotHealer(const Unit& unit) : BotUnit(unit) {}
 
     PathfindingMap getTargetMap() {
-        auto& planetMap = gc.get_starting_planet(gc.get_planet());
-        int w = planetMap.get_width();
-        int h = planetMap.get_height();
-        PathfindingMap damagedRobotMap(w, h);
-        PathfindingMap targetMap(w, h);
-        for (auto& u : ourUnits) {
-            if (!u.get_location().is_on_map()) {
-                continue;
-            }
-            if (is_robot(u.get_unit_type())) {
-                if (u.get_id() == id) {
-                    continue;
-                }
-                double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
-                if (remainingLife == 1.0) {
-                    continue;
-                }
-                    
-                auto uMapLocation = u.get_location().get_map_location();
+        MapReuseObject reuseObject(MapType::Target, unit.get_unit_type(), false);
 
-                targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 15 * (2.0 - remainingLife));
+        PathfindingMap targetMap;
+        if (reusableMaps.count(reuseObject)) {
+            targetMap = reusableMaps[reuseObject];
+        }
+        else {
+            targetMap = PathfindingMap(w, h);
+            for (auto& u : ourUnits) {
+                if (!u.get_location().is_on_map()) {
+                    continue;
+                }
+                if (is_robot(u.get_unit_type())) {
+                    if (u.get_id() == id) {
+                        continue;
+                    }
+                    double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
+                    if (remainingLife == 1.0) {
+                        continue;
+                    }
+                        
+                    auto uMapLocation = u.get_location().get_map_location();
+
+                    targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 15 * (2.0 - remainingLife));
+                }
             }
+            targetMap /= (enemyNearbyMap + 1.0);
+            reusableMaps[reuseObject] = targetMap;
         }
         
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
@@ -863,13 +895,10 @@ struct BotHealer : BotUnit {
         }
 
 
-        return damagedRobotMap / (enemyNearbyMap + 1.0) + targetMap;
+        return targetMap;
     }
 
     PathfindingMap getCostMap() {
-        auto& planetMap = gc.get_starting_planet(gc.get_planet());
-        int w = planetMap.get_width();
-        int h = planetMap.get_height();
         PathfindingMap healerProximityMap(w, h);
         for (auto& u : ourUnits) {
             if (!u.get_location().is_on_map()) {
@@ -1196,9 +1225,9 @@ void selectTravellersForRocket(Unit& unit) {
     sort(candidates.begin(), candidates.end());
     for (int i = 0; i < min((int) candidates.size(), remainingTravellers); i++) {
         if (gc.get_unit(candidates[i].second).get_unit_type() == Worker) {
-            /*if (hasWorker) {
+            if (hasWorker) {
                 continue;
-            }*/
+            }
             hasWorker = true;
         }
         unitShouldGoToRocket[candidates[i].second].push_back(unit.get_id());
@@ -1303,14 +1332,15 @@ int main() {
     }
     printf("Connected!\n");
 
-    auto& planetMap = gc.get_starting_planet(gc.get_planet());
-    int w = planetMap.get_width();
-    int h = planetMap.get_height();
+    planet = gc.get_planet();
+    planetMap = &gc.get_starting_planet(gc.get_planet());
+    w = planetMap->get_width();
+    h = planetMap->get_height();
     karboniteMap = PathfindingMap(w, h);
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
             auto location = MapLocation(gc.get_planet(), i, j);
-            int karbonite = planetMap.get_initial_karbonite_at(location);
+            int karbonite = planetMap->get_initial_karbonite_at(location);
             karboniteMap.weights[i][j] = karbonite;
         }
     }
@@ -1326,6 +1356,8 @@ int main() {
         printf("Round: %d\n", round);
 
         find_units();
+
+        reusableMaps.clear();
 
         if (gc.get_planet() == Mars) {
             auto asteroidPattern = gc.get_asteroid_pattern();
@@ -1344,7 +1376,7 @@ int main() {
                     for (int l = -1; l <= 1; l++) {
                         int x = i+k;
                         int y = j+l;
-                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap.is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
                             ++cnt;
                         }
                     }
@@ -1355,7 +1387,7 @@ int main() {
                     for (int l = -1; l <= 1; l++) {
                         int x = i+k;
                         int y = j+l;
-                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap.is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
                             double w;
                             if (k == 0 && l == 0) {
                                 w = weight1;
@@ -1370,6 +1402,19 @@ int main() {
             }
         }
         enemyPositionMap = newEnemyPositionMap;
+        
+        nearbyFriendMap = PathfindingMap(w, h);
+
+        for (auto& u : ourUnits) {
+            if (u.get_unit_type() == Ranger) {
+                if (!u.get_location().is_on_map()) {
+                    continue;
+                }
+                auto pos = u.get_location().get_map_location();
+                nearbyFriendMap.addInfluence(rangerProximityInfluence, pos.get_x(), pos.get_y());
+            }
+        }
+
 
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
@@ -1490,7 +1535,7 @@ int main() {
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
                 auto location = MapLocation(gc.get_planet(), i, j);
-				if (planetMap.is_passable_terrain_at(location)) {
+				if (planetMap->is_passable_terrain_at(location)) {
                     passableMap.weights[i][j] = 1.0;
                 }
                 else {
