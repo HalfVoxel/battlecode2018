@@ -80,6 +80,21 @@ struct MapReuseObject {
 
 map<MapReuseObject, PathfindingMap> reusableMaps;
 
+vector<vector<double>> calculate_uniform_disc_influence(int squared_radius) {
+    int r = (int)ceil(sqrt(squared_radius));
+    auto res = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 > squared_radius) {
+                continue;
+            }
+            res[dx+r][dy+r] = 1;
+        }
+    }
+    return res;
+}
+
 void initInfluence() {
     int r = 7;
     rangerTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
@@ -125,41 +140,9 @@ void initInfluence() {
         }
     }
     
-    r = 6;
-    healerTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
-    for (int dx = -r; dx <= r; ++dx) {
-        for (int dy = -r; dy <= r; ++dy) {
-            int dis2 = dx*dx + dy*dy;
-            if (dis2 > 30) {
-                continue;
-            }
-            healerTargetInfluence[dx+r][dy+r] = 1;
-        }
-    }
-    
-    r = 6;
-    mageTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
-    for (int dx = -r; dx <= r; ++dx) {
-        for (int dy = -r; dy <= r; ++dy) {
-            int dis2 = dx*dx + dy*dy;
-            if (dis2 > 30) {
-                continue;
-            }
-            mageTargetInfluence[dx+r][dy+r] = 1;
-        }
-    }
-    
-    r = 2;
-    knightTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
-    for (int dx = -r; dx <= r; ++dx) {
-        for (int dy = -r; dy <= r; ++dy) {
-            int dis2 = dx*dx + dy*dy;
-            if (dis2 > 1) {
-                continue;
-            }
-            knightTargetInfluence[dx+r][dy+r] = 1;
-        }
-    }
+    healerTargetInfluence = calculate_uniform_disc_influence(30);
+    mageTargetInfluence = calculate_uniform_disc_influence(30);
+    knightTargetInfluence = calculate_uniform_disc_influence(1);
     
     r = 5;
     healerProximityInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
@@ -170,16 +153,7 @@ void initInfluence() {
         }
     }
     
-    r = 6;
-    healerInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
-    for (int dx = -r; dx <= r; ++dx) {
-        for (int dy = -r; dy <= r; ++dy) {
-            int dis2 = dx*dx + dy*dy;
-            if (dis2 <= 30) {
-                healerInfluence[dx+r][dy+r] = 1;
-            }
-        }
-    }
+    healerInfluence = calculate_uniform_disc_influence(31);
     
     r = 5;
     workerProximityInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
