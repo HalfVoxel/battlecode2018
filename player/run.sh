@@ -15,7 +15,7 @@ else
 	exit 1
 fi
 
-g++ -std=c++11 -Wall -g -rdynamic main.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+g++ -std=c++11 -Wall -g -rdynamic *.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
 
 # run the program!
-./main
+time ./main
