@@ -310,6 +310,7 @@ struct BotMage : BotUnit {
     }
 };
 
+
 struct BotHealer : BotUnit {
     BotHealer(const Unit& unit) : BotUnit(unit) {}
 
@@ -480,6 +481,18 @@ struct BotFactory : BotUnit {
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
                 if (gc.can_produce_robot(id, Ranger)) {
                     gc.produce_robot(id, Ranger);
+                }
+            });
+        }
+        if (gc.can_produce_robot(id, Worker)){
+            double score = 0;
+            auto researchInfo = gc.get_research_info();
+            if (state.typeCount[Worker] == 0 && (researchInfo.get_level(Rocket) >= 1 || state.typeCount[Factory] < 3)) {
+                score += 10;
+            }
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Worker), 2, [=] {
+                if (gc.can_produce_robot(id, Worker)) {
+                    gc.produce_robot(id, Worker);
                 }
             });
         }
@@ -658,29 +671,38 @@ void updateEnemyPositionMap() {
     PathfindingMap newEnemyPositionMap(w, h);
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
-            int cnt = 0;
+            double cnt = 0;
             for (int k = -1; k <= 1; k++) {
                 for (int l = -1; l <= 1; l++) {
+                    if (!k && !l) {
+                        continue;
+                    }
                     int x = i+k;
                     int y = j+l;
-                    if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
-                        ++cnt;
+                    if (x >= 0 && y >= 0 && x < w && y < w) {
+                        if (planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                            ++cnt;
+                        }
                     }
                 }
             }
             double weight1 = 0.8;
-            double weight2 = cnt > 1 ? 0.15 / (cnt - 1) : 0;
+            double weight2 = cnt > 0 ? 0.15 / cnt : 0;
             for (int k = -1; k <= 1; k++) {
                 for (int l = -1; l <= 1; l++) {
+                    if (!k && !l) {
+                        newEnemyPositionMap.weights[i][j] += weight1 * enemyPositionMap.weights[i][j];
+                        continue;
+                    }
                     int x = i+k;
                     int y = j+l;
-                    if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                    if (x >= 0 && y >= 0 && x < w && y < w) {
                         double w;
-                        if (k == 0 && l == 0) {
-                            w = weight1;
+                        if (planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                            w = weight2;
                         }
                         else {
-                            w = weight2;
+                            w = 0;
                         }
                         newEnemyPositionMap.weights[x][y] += w * enemyPositionMap.weights[i][j];
                     }
@@ -768,6 +790,20 @@ void updateEnemyInfluenceMaps(){
             }
             enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
             enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
+        }
+    }
+
+    auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
+    for (auto& enemy : initial_units) {
+        if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
+            auto pos = enemy.get_location().get_map_location();
+            for (int x = 0; x < w; ++x) {
+                for (int y = 0; y < h; ++y) {
+                    int dx = pos.get_x() - x;
+                    int dy = pos.get_y() - y;
+                    enemyNearbyMap.weights[x][y] += 0.01 / (dx * dx + dy * dy);
+                }
+            }
         }
     }
 }
@@ -872,6 +908,9 @@ void createUnits() {
                     cerr << "Unknown unit type!" << endl;
                     exit(1);
             }
+            if (unit.get_unit_type() == Worker && state.typeCount[Worker] > 100) {
+                botUnitPtr->isRocketFodder = true;
+            }
             unitMap[id] = botUnitPtr;
         } else {
             botUnitPtr = unitMap[id];
@@ -880,18 +919,23 @@ void createUnits() {
     }
 }
 
+map<UnitType, double> timeUsed;
+
 bool tickUnits(bool firstIteration) {
     bool anyTickDone = false;
     for (const auto unit : ourUnits) {
         auto botunit = unitMap[unit.get_id()];
+        if (botunit == nullptr) {
+            continue;
+        }
         if (firstIteration) {
             botunit->hasDoneTick = false;
         }
-        if (botunit != nullptr && !botunit->hasDoneTick) {
+        if (!botunit->hasDoneTick) {
             time_t start = clock();
-            //cout << unitTypeToString[botunit->unit.get_unit_type()] << ": ";
             botunit->tick();
-            //cout << (clock()-start+0.0)/CLOCKS_PER_SEC << endl;
+            double dt = (clock()-start+0.0)/CLOCKS_PER_SEC;
+            timeUsed[botunit->unit.get_unit_type()] += dt;
             anyTickDone |= botunit->hasDoneTick;
         }
     }
@@ -936,6 +980,7 @@ int main() {
     unitTypeToString[Ranger]="Ranger";
     unitTypeToString[Mage]="Mage";
     unitTypeToString[Knight]="Knight";
+    unitTypeToString[Healer]="Healer";
     unitTypeToString[Factory]="Factory";
     unitTypeToString[Rocket]="Rocket";
 
@@ -960,11 +1005,12 @@ int main() {
 
     enemyPositionMap = PathfindingMap(w, h);
 
+    double totalTurnTime = 0.0;
     // loop through the whole game.
     while (true) {
+        time_t startPreprocessing = clock();
         mapComputationTime = 0;
         pathfindingTime = 0;
-        time_t startPreprocessing = clock();
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
@@ -1025,6 +1071,14 @@ int main() {
 
         cout << "Map computation time: " << mapComputationTime << endl;
         cout << "Pathfinding time: " << pathfindingTime << endl;
+        for (auto it : timeUsed) {
+            cout << unitTypeToString[it.first] << ": " << it.second << endl;
+        }
+
+        double turnTime = (clock() - startPreprocessing + 0.0) / CLOCKS_PER_SEC;
+        cout << "Turn time: " << turnTime << endl; 
+        totalTurnTime += turnTime;
+        cout << "Average: " << (totalTurnTime)/gc.get_round() << endl;
 
         // this line helps the output logs make more sense by forcing output to be sent
         // to the manager.

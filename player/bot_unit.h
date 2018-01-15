@@ -6,7 +6,8 @@ struct BotUnit {
     const unsigned id;
     double pathfindingScore;
     bool hasDoneTick;
-    BotUnit(const bc::Unit& unit) : unit(unit), id(unit.get_id()), hasDoneTick(false) {}
+    bool isRocketFodder;
+    BotUnit(const bc::Unit& unit) : unit(unit), id(unit.get_id()), hasDoneTick(false), isRocketFodder(false) {}
     virtual void tick();
     virtual PathfindingMap getTargetMap();
     virtual PathfindingMap getCostMap();

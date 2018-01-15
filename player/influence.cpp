@@ -124,6 +124,9 @@ void initInfluence() {
             if (dis2 <= 2) {
                 factoryProximityInfluence[dx+r][dy+r] = 0.4;
             }
+            if (dis2 == 0) {
+                factoryProximityInfluence[dx+r][dy+r] = 5;
+            }
         }
     }
     

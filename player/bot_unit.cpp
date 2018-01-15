@@ -32,11 +32,35 @@ PathfindingMap BotUnit::getTargetMap() { return PathfindingMap(); }
 PathfindingMap BotUnit::getCostMap() { return PathfindingMap(); }
 
 MapLocation BotUnit::getNextLocation(MapLocation from, bool allowStructures) {
+    bool canMove = false;
+    int x = from.get_x();
+    int y = from.get_y();
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+            int nx = x + dx;
+            int ny = y + dy;
+            if (nx >= 0 && ny >= 0 && nx < (int)passableMap.weights.size() && ny < (int)passableMap.weights[nx].size()) {
+                if (passableMap.weights[nx][ny] < 1000) {
+                    canMove = true;
+                }
+            }
+        }
+    }
+    if (!canMove) {
+        return from;
+    }
+    if (isRocketFodder) {
+        if (y > 0 && passableMap.weights[x][y-1] < 1000) {
+            return from.add(South);
+        }
+        if (x > 0) {
+            return from.add(West);
+        }
+        return from;
+    }
     time_t start = clock();
     auto targetMap = getTargetMap();
     auto costMap = getCostMap();
-    int x = from.get_x();
-    int y = from.get_y();
     if (allowStructures) {
         costMap.weights[x][y] = 1;
     }
@@ -97,9 +121,6 @@ void BotUnit::moveToLocation(MapLocation nextLocation) {
 
 bool BotUnit::unloadFrontUnit() {
     BotUnit* u = unitMap[unit.get_structure_garrison()[0]];
-    /*if (u->unit.get_unit_type() == Mage && (u->unit.get_movement_heat() >= 10 || u->unit.get_attack_heat() >= 10)) {
-        return false;
-    }*/
     auto nextLocation = u->getNextLocation(unit.get_location().get_map_location(), false);
     Direction dir = unit.get_location().get_map_location().direction_to(nextLocation);
     if (gc.can_unload(id, dir)){
@@ -213,7 +234,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         targetMap = reusableMaps[reuseObject];
     }
     else {
-        targetMap = PathfindingMap(w, h);
+        targetMap = enemyNearbyMap * 0.01;
 
         for (auto& enemy : enemyUnits) {
             if (enemy.get_location().is_on_map()) {
@@ -285,6 +306,9 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
 PathfindingMap BotUnit::defaultMilitaryCostMap () {
     return (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0);
 }
+
+double attackingTime;
+double movingTime;
 
 void BotUnit::default_military_behaviour() {
 
