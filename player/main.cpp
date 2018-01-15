@@ -49,6 +49,10 @@ vector<vector<double> > rangerProximityInfluence;
 double averageHealerSuccessRate;
 map<unsigned, vector<unsigned> > unitShouldGoToRocket;
 int launchedWorkerCount;
+map<UnitType, double> timeConsumptionByUnit;
+map<UnitType, string> unitTypeToString;
+double pathfindingTime;
+double mapComputationTime;
 
 enum class MapType { Target, Cost };
 
@@ -61,6 +65,9 @@ struct MapReuseObject {
     }
 
     bool operator< (const MapReuseObject& other) const {
+        if (mapType != other.mapType) {
+            return mapType < other.mapType;
+        }
         if (unitType != other.unitType) {
             return unitType < other.unitType;
         }
@@ -356,6 +363,7 @@ struct BotUnit {
     virtual PathfindingMap getCostMap() { return PathfindingMap(); }
 
     MapLocation getNextLocation(MapLocation from, bool allowStructures) {
+        time_t start = clock();
         auto targetMap = getTargetMap();
         auto costMap = getCostMap();
         int x = from.get_x();
@@ -378,9 +386,12 @@ struct BotUnit {
                 }
             }
         }
+        mapComputationTime += (clock() - start + 0.0) / CLOCKS_PER_SEC;
+        start = clock();
         Pathfinder pathfinder;
         auto nextLocation = pathfinder.getNextLocation(from, targetMap, costMap);
         pathfindingScore = pathfinder.bestScore;
+        pathfindingTime += (clock() - start + 0.0) / CLOCKS_PER_SEC;
 
         return nextLocation;
     }
@@ -525,7 +536,6 @@ struct BotUnit {
                             r -= enemyPositionMap.weights[x][y];
                             if (r < 0) {
                                 if (gc.can_begin_snipe(unit.get_id(), MapLocation(gc.get_planet(), x, y))) {
-                                    cout << "Sniping" << endl;
                                     gc.begin_snipe(unit.get_id(), MapLocation(gc.get_planet(), x, y));
                                 }
                                 break;
@@ -899,29 +909,37 @@ struct BotHealer : BotUnit {
     }
 
     PathfindingMap getCostMap() {
-        PathfindingMap healerProximityMap(w, h);
-        for (auto& u : ourUnits) {
-            if (!u.get_location().is_on_map()) {
-                continue;
-            }
-            if (is_robot(u.get_unit_type())) {
-                if (u.get_id() == id) {
-                    continue;
-                }
-                double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
-                if (remainingLife == 1.0) {
-                    continue;
-                }
-                    
-                auto uMapLocation = u.get_location().get_map_location();
-
-                if (u.get_unit_type() == Healer) {
-                    healerProximityMap.addInfluence(healerProximityInfluence, uMapLocation.get_x(), uMapLocation.get_y());
-                }
-            }
+        MapReuseObject reuseObject(MapType::Cost, unit.get_unit_type(), false);
+        if (reusableMaps.count(reuseObject)) {
+            return reusableMaps[reuseObject];
         }
-        
-        return passableMap + healerProximityMap + enemyInfluenceMap;
+        else {
+            PathfindingMap healerProximityMap(w, h);
+            for (auto& u : ourUnits) {
+                if (!u.get_location().is_on_map()) {
+                    continue;
+                }
+                if (is_robot(u.get_unit_type())) {
+                    if (u.get_id() == id) {
+                        continue;
+                    }
+                    double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
+                    if (remainingLife == 1.0) {
+                        continue;
+                    }
+                        
+                    auto uMapLocation = u.get_location().get_map_location();
+
+                    if (u.get_unit_type() == Healer) {
+                        healerProximityMap.addInfluence(healerProximityInfluence, uMapLocation.get_x(), uMapLocation.get_y());
+                    }
+                }
+            }
+            
+            auto costMap = passableMap + healerProximityMap + enemyInfluenceMap;
+            reusableMaps[reuseObject] = costMap;
+            return costMap;
+        }
     }
 
     void tick() {
@@ -1176,7 +1194,6 @@ struct BotRocket : BotUnit {
                 auto res = find_best_landing_spot();
                 if (res.first) {
                     if (gc.can_launch_rocket(unit.get_id(), res.second)) {
-                        invalidate_units();
                         gc.launch_rocket(unit.get_id(), res.second);
                         invalidate_units();
                         launchedWorkerCount += workerCount;
@@ -1320,6 +1337,13 @@ int main() {
     printf("Player C++ bot starting\n");
     printf("Connecting to manager...\n");
 
+    unitTypeToString[Worker]="Worker";
+    unitTypeToString[Ranger]="Ranger";
+    unitTypeToString[Mage]="Mage";
+    unitTypeToString[Knight]="Knight";
+    unitTypeToString[Factory]="Factory";
+    unitTypeToString[Rocket]="Rocket";
+
     // std::default_random_engine generator;
     // std::uniform_int_distribution<int> distribution (0,8);
     // auto dice = std::bind ( distribution , generator );
@@ -1352,6 +1376,9 @@ int main() {
 
     // loop through the whole game.
     while (true) {
+        mapComputationTime = 0;
+        pathfindingTime = 0;
+        time_t startPreprocessing = clock();
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
@@ -1420,8 +1447,10 @@ int main() {
             for (int j = 0; j < h; j++) {
                 auto location = MapLocation(gc.get_planet(), i, j);
                 if (gc.can_sense_location(location)) {
-                    int karbonite = gc.get_karbonite_at(location);
-                    karboniteMap.weights[i][j] = karbonite;
+                    if (karboniteMap.weights[i][j]) {
+                        int karbonite = gc.get_karbonite_at(location);
+                        karboniteMap.weights[i][j] = karbonite;
+                    }
                     enemyPositionMap.weights[i][j] = 0;
                 }
             }
@@ -1561,8 +1590,11 @@ int main() {
             }
         }
 
+        cout << "Preprocessing: " << (clock()-startPreprocessing+0.0)/CLOCKS_PER_SEC << endl;
+
         bool firstIteration = true;
         while (true) {
+            time_t startIteration = clock();
             for (const auto unit : ourUnits) {
                 assert(gc.has_unit(unit.get_id()));
                 const unsigned id = unit.get_id();
@@ -1595,10 +1627,15 @@ int main() {
                     botunit->hasDoneTick = false;
                 }
                 if (botunit != nullptr && !botunit->hasDoneTick) {
+                    time_t start = clock();
+                    //cout << unitTypeToString[botunit->unit.get_unit_type()] << ": ";
                     botunit->tick();
+                    //cout << (clock()-start+0.0)/CLOCKS_PER_SEC << endl;
                     anyTickDone = (anyTickDone || botunit->hasDoneTick);
                 }
             }
+
+            cout << "Iteration: " << (clock()-startIteration+0.0)/CLOCKS_PER_SEC << endl;
 
             if (!anyTickDone) {
                 break;
@@ -1630,6 +1667,9 @@ int main() {
             auto type = researcher.getBestResearch();
             gc.queue_research(type);
         }
+
+        cout << "Map computation time: " << mapComputationTime << endl;
+        cout << "Pathfinding time: " << pathfindingTime << endl;
 
         // this line helps the output logs make more sense by forcing output to be sent
         // to the manager.
