@@ -625,7 +625,7 @@ struct Researcher {
     }
 };
 
-void find_units() {
+void findUnits() {
     ourUnits = gc.get_my_units();
     auto planet = gc.get_planet();
     ourTeam = gc.get_team();
@@ -641,6 +641,289 @@ void find_units() {
     }
     allUnits.insert(allUnits.end(), ourUnits.begin(), ourUnits.end());
     allUnits.insert(allUnits.end(), enemyUnits.begin(), enemyUnits.end());
+}
+
+void updateAsteroids() {
+    if (gc.get_planet() == Mars) {
+        auto asteroidPattern = gc.get_asteroid_pattern();
+        if (asteroidPattern.has_asteroid_on_round(gc.get_round())) {
+            auto strike = asteroidPattern.get_asteroid_on_round(gc.get_round());
+            auto location = strike.get_map_location();
+            karboniteMap.weights[location.get_x()][location.get_y()] += strike.get_karbonite();
+        }
+    }
+}
+
+void updateEnemyPositionMap() {
+    PathfindingMap newEnemyPositionMap(w, h);
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            int cnt = 0;
+            for (int k = -1; k <= 1; k++) {
+                for (int l = -1; l <= 1; l++) {
+                    int x = i+k;
+                    int y = j+l;
+                    if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                        ++cnt;
+                    }
+                }
+            }
+            double weight1 = 0.8;
+            double weight2 = cnt > 1 ? 0.15 / (cnt - 1) : 0;
+            for (int k = -1; k <= 1; k++) {
+                for (int l = -1; l <= 1; l++) {
+                    int x = i+k;
+                    int y = j+l;
+                    if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                        double w;
+                        if (k == 0 && l == 0) {
+                            w = weight1;
+                        }
+                        else {
+                            w = weight2;
+                        }
+                        newEnemyPositionMap.weights[x][y] += w * enemyPositionMap.weights[i][j];
+                    }
+                }
+            }
+        }
+    }
+    enemyPositionMap = newEnemyPositionMap;
+}
+
+void updateNearbyFriendMap() {
+    nearbyFriendMap = PathfindingMap(w, h);
+
+    for (auto& u : ourUnits) {
+        if (u.get_unit_type() == Ranger) {
+            if (!u.get_location().is_on_map()) {
+                continue;
+            }
+            auto pos = u.get_location().get_map_location();
+            nearbyFriendMap.addInfluence(rangerProximityInfluence, pos.get_x(), pos.get_y());
+        }
+    }
+}
+
+void initKarboniteMap() {
+    karboniteMap = PathfindingMap(w, h);
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            auto location = MapLocation(gc.get_planet(), i, j);
+            int karbonite = planetMap->get_initial_karbonite_at(location);
+            karboniteMap.weights[i][j] = karbonite;
+        }
+    }
+}
+
+// NOTE: this call also updates enemy position map for some reason
+void updateKarboniteMap() {
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            auto location = MapLocation(gc.get_planet(), i, j);
+            if (gc.can_sense_location(location)) {
+                if (karboniteMap.weights[i][j]) {
+                    int karbonite = gc.get_karbonite_at(location);
+                    karboniteMap.weights[i][j] = karbonite;
+                }
+                enemyPositionMap.weights[i][j] = 0;
+            }
+        }
+    }
+
+    fuzzyKarboniteMap = PathfindingMap(w, h);
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            for (int k = -1; k <= 1; k++) {
+                for (int l = -1; l <= 1; l++) {
+                    int x = i+k;
+                    int y = j+l;
+                    if (x >= 0 && y >= 0 && x < w && y < w){
+                        double kar = karboniteMap.weights[x][y];
+                        kar = log(kar + 1);
+                        if (k != 0 || l != 0)
+                            kar *= 0.9;
+                        fuzzyKarboniteMap.weights[i][j] = max(fuzzyKarboniteMap.weights[i][j], kar);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void updateEnemyInfluenceMaps(){
+    enemyInfluenceMap = PathfindingMap(w, h);
+    enemyNearbyMap = PathfindingMap(w, h);
+    for (auto& u : enemyUnits) {
+        if (u.get_location().is_on_map()) {
+            auto pos = u.get_location().get_map_location();
+            if (u.get_unit_type() == Ranger) {
+                enemyInfluenceMap.addInfluence(enemyRangerTargetInfluence, pos.get_x(), pos.get_y());
+            }
+            if (u.get_unit_type() == Mage) {
+                enemyInfluenceMap.addInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
+            }
+            if (u.get_unit_type() == Knight) {
+                enemyInfluenceMap.addInfluence(knightTargetInfluence, pos.get_x(), pos.get_y());
+            }
+            enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
+            enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
+        }
+    }
+}
+
+void updateWorkerProximityMap() {
+    workerProximityMap = PathfindingMap(w, h);
+    for (auto& u : ourUnits) {
+        if (u.get_location().is_on_map()) {
+            if (u.get_unit_type() == Worker) {
+                auto pos = u.get_location().get_map_location();
+                workerProximityMap.maxInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
+            }
+            if (u.get_unit_type() == Factory && u.structure_is_built()) {
+                auto pos = u.get_location().get_map_location();
+                workerProximityMap.maxInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
+            }
+            if (u.get_unit_type() == Rocket && u.structure_is_built()) {
+                auto pos = u.get_location().get_map_location();
+                workerProximityMap.maxInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
+            }
+        }
+    }
+}
+
+void updateDamagedStructuresMap() {
+    damagedStructureMap = PathfindingMap(w, h);
+    for (auto& unit : ourUnits) {
+        if (unit.get_unit_type() == Factory || unit.get_unit_type() == Rocket) {
+            double remainingLife = unit.get_health() / (unit.get_max_health() + 0.0);
+            if (remainingLife == 1.0) {
+                continue;
+            }
+            for (int i = 0; i < 8; i++) {
+                Direction d = (Direction) i;
+                auto location = unit.get_location().get_map_location().add(d);
+                int x = location.get_x();
+                int y = location.get_y();
+                if (x >= 0 && x < w && y >= 0 && y < h) {
+                    if (gc.has_unit_at_location(location) && is_structure(gc.sense_unit_at_location(location).get_unit_type())) {
+                        continue;
+                    }
+                    if (unit.structure_is_built()) {
+                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 2 * (2.0 - remainingLife));
+                    }
+                    else {
+                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 3 * (1.5 + remainingLife));
+                    }
+                }
+            }
+        }
+    }
+}
+
+void updatePassableMap() {
+    passableMap = PathfindingMap(w, h);
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            auto location = MapLocation(gc.get_planet(), i, j);
+            if (planetMap->is_passable_terrain_at(location)) {
+                passableMap.weights[i][j] = 1.0;
+            }
+            else {
+                passableMap.weights[i][j] = numeric_limits<double>::infinity();
+            }
+        }
+    }
+
+    for (const auto unit : enemyUnits) {
+        auto unitMapLocation = unit.get_location().get_map_location();
+        passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+    }
+
+    for (const auto unit : ourUnits) {
+        if (unit.get_location().is_on_map()) {
+            auto unitMapLocation = unit.get_location().get_map_location();
+            if (is_robot(unit.get_unit_type())) {
+                passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+            }
+            else {
+                passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1.5;
+            }
+        }
+    }
+}
+
+void createUnits() {
+    for (const auto unit : ourUnits) {
+        assert(gc.has_unit(unit.get_id()));
+        const unsigned id = unit.get_id();
+        BotUnit* botUnitPtr;
+
+        if (unitMap.find(id) == unitMap.end()) {
+            switch(unit.get_unit_type()) {
+                case Worker: botUnitPtr = new BotWorker(unit); break;
+                case Knight: botUnitPtr = new BotKnight(unit); break;
+                case Ranger: botUnitPtr = new BotRanger(unit); break;
+                case Mage: botUnitPtr = new BotMage(unit); break;
+                case Healer: botUnitPtr = new BotHealer(unit); break;
+                case Factory: botUnitPtr = new BotFactory(unit); break;
+                case Rocket: botUnitPtr = new BotRocket(unit); break;
+                default:
+                    cerr << "Unknown unit type!" << endl;
+                    exit(1);
+            }
+            unitMap[id] = botUnitPtr;
+        } else {
+            botUnitPtr = unitMap[id];
+        }
+        botUnitPtr->unit = unit;
+    }
+}
+
+bool tickUnits(bool firstIteration) {
+    bool anyTickDone = false;
+    for (const auto unit : ourUnits) {
+        auto botunit = unitMap[unit.get_id()];
+        if (firstIteration) {
+            botunit->hasDoneTick = false;
+        }
+        if (botunit != nullptr && !botunit->hasDoneTick) {
+            time_t start = clock();
+            //cout << unitTypeToString[botunit->unit.get_unit_type()] << ": ";
+            botunit->tick();
+            //cout << (clock()-start+0.0)/CLOCKS_PER_SEC << endl;
+            anyTickDone |= botunit->hasDoneTick;
+        }
+    }
+    return anyTickDone;
+}
+
+void executeMacroObjects() {
+    sort(macroObjects.rbegin(), macroObjects.rend());
+    bool failedPaying = false;
+    for (auto& macroObject : macroObjects) {
+        if (macroObject.score <= 0) {
+            continue;
+        }
+        if (failedPaying && macroObject.cost) {
+            continue;
+        }
+        if (gc.get_karbonite() >= macroObject.cost) {
+            macroObject.execute();
+        } else {
+            failedPaying = true;
+        }
+    }
+    macroObjects.clear();
+}
+
+Researcher researcher;
+void updateResearch() {
+    auto researchInfo = gc.get_research_info();
+    if (researchInfo.get_queue().size() == 0) {
+        auto type = researcher.getBestResearch();
+        gc.queue_research(type);
+    }
 }
 
 int main() {
@@ -672,18 +955,9 @@ int main() {
     planetMap = &gc.get_starting_planet(gc.get_planet());
     w = planetMap->get_width();
     h = planetMap->get_height();
-    karboniteMap = PathfindingMap(w, h);
-    for (int i = 0; i < w; i++) {
-        for (int j = 0; j < h; j++) {
-            auto location = MapLocation(gc.get_planet(), i, j);
-            int karbonite = planetMap->get_initial_karbonite_at(location);
-            karboniteMap.weights[i][j] = karbonite;
-        }
-    }
-
+    initKarboniteMap();
     initInfluence();
-            
-    Researcher researcher;
+
     enemyPositionMap = PathfindingMap(w, h);
 
     // loop through the whole game.
@@ -694,162 +968,18 @@ int main() {
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
-        find_units();
+        findUnits();
 
         reusableMaps.clear();
+        updateAsteroids();
+        updateEnemyPositionMap();
+        updateNearbyFriendMap();
 
-        if (gc.get_planet() == Mars) {
-            auto asteroidPattern = gc.get_asteroid_pattern();
-            if (asteroidPattern.has_asteroid_on_round(gc.get_round())) {
-                auto strike = asteroidPattern.get_asteroid_on_round(gc.get_round());
-                auto location = strike.get_map_location();
-                karboniteMap.weights[location.get_x()][location.get_y()] += strike.get_karbonite();
-            }
-        }
-
-        PathfindingMap newEnemyPositionMap(w, h);
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                int cnt = 0;
-                for (int k = -1; k <= 1; k++) {
-                    for (int l = -1; l <= 1; l++) {
-                        int x = i+k;
-                        int y = j+l;
-                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
-                            ++cnt;
-                        }
-                    }
-                }
-                double weight1 = 0.8;
-                double weight2 = cnt > 1 ? 0.15 / (cnt - 1) : 0;
-                for (int k = -1; k <= 1; k++) {
-                    for (int l = -1; l <= 1; l++) {
-                        int x = i+k;
-                        int y = j+l;
-                        if (x >= 0 && y >= 0 && x < w && y < w && planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
-                            double w;
-                            if (k == 0 && l == 0) {
-                                w = weight1;
-                            }
-                            else {
-                                w = weight2;
-                            }
-                            newEnemyPositionMap.weights[x][y] += w * enemyPositionMap.weights[i][j];
-                        }
-                    }
-                }
-            }
-        }
-        enemyPositionMap = newEnemyPositionMap;
-        
-        nearbyFriendMap = PathfindingMap(w, h);
-
-        for (auto& u : ourUnits) {
-            if (u.get_unit_type() == Ranger) {
-                if (!u.get_location().is_on_map()) {
-                    continue;
-                }
-                auto pos = u.get_location().get_map_location();
-                nearbyFriendMap.addInfluence(rangerProximityInfluence, pos.get_x(), pos.get_y());
-            }
-        }
-
-
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                auto location = MapLocation(gc.get_planet(), i, j);
-                if (gc.can_sense_location(location)) {
-                    if (karboniteMap.weights[i][j]) {
-                        int karbonite = gc.get_karbonite_at(location);
-                        karboniteMap.weights[i][j] = karbonite;
-                    }
-                    enemyPositionMap.weights[i][j] = 0;
-                }
-            }
-        }
-
-        fuzzyKarboniteMap = PathfindingMap(w, h);
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                for (int k = -1; k <= 1; k++) {
-                    for (int l = -1; l <= 1; l++) {
-                        int x = i+k;
-                        int y = j+l;
-                        if (x >= 0 && y >= 0 && x < w && y < w){
-                            double kar = karboniteMap.weights[x][y];
-                            kar = log(kar + 1);
-                            if (k != 0 || l != 0)
-                                kar *= 0.9;
-                            fuzzyKarboniteMap.weights[i][j] = max(fuzzyKarboniteMap.weights[i][j], kar);
-                        }
-                    }
-                }
-            }
-        }
-
-        enemyInfluenceMap = PathfindingMap(w, h);
-        enemyNearbyMap = PathfindingMap(w, h);
-        for (auto& u : enemyUnits) {
-            if (u.get_location().is_on_map()) {
-                auto pos = u.get_location().get_map_location();
-                if (u.get_unit_type() == Ranger) {
-                    enemyInfluenceMap.addInfluence(enemyRangerTargetInfluence, pos.get_x(), pos.get_y());
-                }
-                if (u.get_unit_type() == Mage) {
-                    enemyInfluenceMap.addInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
-                }
-                if (u.get_unit_type() == Knight) {
-                    enemyInfluenceMap.addInfluence(knightTargetInfluence, pos.get_x(), pos.get_y());
-                }
-                enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
-                enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
-            }
-        }
-
-        workerProximityMap = PathfindingMap(w, h);
-        for (auto& u : ourUnits) {
-            if (u.get_location().is_on_map()) {
-                if (u.get_unit_type() == Worker) {
-                    auto pos = u.get_location().get_map_location();
-                    workerProximityMap.maxInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
-                }
-                if (u.get_unit_type() == Factory && u.structure_is_built()) {
-                    auto pos = u.get_location().get_map_location();
-                    workerProximityMap.maxInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
-                }
-                if (u.get_unit_type() == Rocket && u.structure_is_built()) {
-                    auto pos = u.get_location().get_map_location();
-                    workerProximityMap.maxInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
-                }
-            }
-        }
-        
-        damagedStructureMap = PathfindingMap(w, h);
-        for (auto& unit : ourUnits) {
-            if (unit.get_unit_type() == Factory || unit.get_unit_type() == Rocket) {
-                double remainingLife = unit.get_health() / (unit.get_max_health() + 0.0);
-                if (remainingLife == 1.0) {
-                    continue;
-                }
-                for (int i = 0; i < 8; i++) {
-                    Direction d = (Direction) i;
-                    auto location = unit.get_location().get_map_location().add(d);
-                    int x = location.get_x();
-                    int y = location.get_y();
-                    if (x >= 0 && x < w && y >= 0 && y < h) {
-                        if (gc.has_unit_at_location(location) && is_structure(gc.sense_unit_at_location(location).get_unit_type())) {
-                            continue;
-                        }
-                        if (unit.structure_is_built()) {
-                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 2 * (2.0 - remainingLife));
-                        }
-                        else {
-                            damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 3 * (1.5 + remainingLife));
-                        }
-                    }
-                }
-            }
-        }
+        // NOTE: this call also updates enemy position map for some reason
+        updateKarboniteMap();
+        updateEnemyInfluenceMaps();
+        updateWorkerProximityMap();
+        updateDamagedStructuresMap();
 
 
         unitShouldGoToRocket.clear();
@@ -872,113 +1002,26 @@ int main() {
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
 
-        passableMap = PathfindingMap(w, h);
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                auto location = MapLocation(gc.get_planet(), i, j);
-				if (planetMap->is_passable_terrain_at(location)) {
-                    passableMap.weights[i][j] = 1.0;
-                }
-                else {
-                    passableMap.weights[i][j] = numeric_limits<double>::infinity();
-                }
-            }
-        }
-
-        for (const auto unit : enemyUnits) {
-            auto unitMapLocation = unit.get_location().get_map_location();
-            passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
-        }
-
-        for (const auto unit : ourUnits) {
-            if (unit.get_location().is_on_map()) {
-                auto unitMapLocation = unit.get_location().get_map_location();
-                if (is_robot(unit.get_unit_type())) {
-                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
-                }
-                else {
-                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1.5;
-                }
-            }
-        }
+        updatePassableMap();
 
         cout << "Preprocessing: " << (clock()-startPreprocessing+0.0)/CLOCKS_PER_SEC << endl;
 
         bool firstIteration = true;
         while (true) {
             time_t startIteration = clock();
-            for (const auto unit : ourUnits) {
-                assert(gc.has_unit(unit.get_id()));
-                const unsigned id = unit.get_id();
-                BotUnit* botUnitPtr;
-
-                if (unitMap.find(id) == unitMap.end()) {
-                    switch(unit.get_unit_type()) {
-                        case Worker: botUnitPtr = new BotWorker(unit); break;
-                        case Knight: botUnitPtr = new BotKnight(unit); break;
-                        case Ranger: botUnitPtr = new BotRanger(unit); break;
-                        case Mage: botUnitPtr = new BotMage(unit); break;
-                        case Healer: botUnitPtr = new BotHealer(unit); break;
-                        case Factory: botUnitPtr = new BotFactory(unit); break;
-                        case Rocket: botUnitPtr = new BotRocket(unit); break;
-                        default:
-                            cerr << "Unknown unit type!" << endl;
-                            exit(1);
-                    }
-                    unitMap[id] = botUnitPtr;
-                } else {
-                    botUnitPtr = unitMap[id];
-                }
-                botUnitPtr->unit = unit;
-            }
-
-            bool anyTickDone = false;
-            for (const auto unit : ourUnits) {
-                auto botunit = unitMap[unit.get_id()];
-                if (firstIteration) {
-                    botunit->hasDoneTick = false;
-                }
-                if (botunit != nullptr && !botunit->hasDoneTick) {
-                    time_t start = clock();
-                    //cout << unitTypeToString[botunit->unit.get_unit_type()] << ": ";
-                    botunit->tick();
-                    //cout << (clock()-start+0.0)/CLOCKS_PER_SEC << endl;
-                    anyTickDone = (anyTickDone || botunit->hasDoneTick);
-                }
-            }
+            createUnits();
+            bool anyTickDone = tickUnits(firstIteration);
 
             cout << "Iteration: " << (clock()-startIteration+0.0)/CLOCKS_PER_SEC << endl;
 
-            if (!anyTickDone) {
-                break;
-            }
-        
-            find_units();
-            firstIteration = false;
+            if (!anyTickDone) break;
 
-            sort(macroObjects.rbegin(), macroObjects.rend());
-            bool failedPaying = false;
-            for (auto& macroObject : macroObjects) {
-                if (macroObject.score <= 0) {
-                    continue;
-                }
-                if (failedPaying && macroObject.cost) {
-                    continue;
-                }
-                if (gc.get_karbonite() >= macroObject.cost) {
-                    macroObject.execute();
-                } else {
-                    failedPaying = true;
-                }
-            }
-            macroObjects.clear();
+            findUnits();
+            firstIteration = false;
+            executeMacroObjects();
         }
-        
-        auto researchInfo = gc.get_research_info();
-        if (researchInfo.get_queue().size() == 0) {
-            auto type = researcher.getBestResearch();
-            gc.queue_research(type);
-        }
+
+        updateResearch();
 
         cout << "Map computation time: " << mapComputationTime << endl;
         cout << "Pathfinding time: " << pathfindingTime << endl;
