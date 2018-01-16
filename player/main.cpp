@@ -22,6 +22,7 @@ using namespace std;
 double averageHealerSuccessRate;
 map<UnitType, double> timeConsumptionByUnit;
 map<UnitType, string> unitTypeToString;
+bool hasOvercharge;
 double bestMacroObjectScore;
 
 
@@ -189,32 +190,34 @@ struct BotWorker : BotUnit {
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
         double replicateScore = karbonitePerWorker * 0.008 + 2.5 / state.typeCount[Worker];
 
-        for (int i = 0; i < 8; i++) {
-            Direction d = (Direction) i;
-            // Placing 'em blueprints
-            auto newLocation = unitMapLocation.add(d);
-            if(isOnMap(newLocation) && gc.can_sense_location(newLocation) && gc.is_occupiable(newLocation)) {
-                double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
-                macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
-                    if(gc.can_blueprint(id, Factory, d)){
-                        gc.blueprint(id, Factory, d);
-                    }
-                });
-                auto researchInfo = gc.get_research_info();
-                if (researchInfo.get_level(Rocket) >= 1) {
-                    double factor = 0.01;
-                    if (gc.get_round() > 600) {
-                        factor = 0.5;
-                    }
-                    if (!launchedWorkerCount && !state.typeCount[Rocket]) {
-                        factor += 0.5;
-                    }
-                    double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
-                    macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
-                        if(gc.can_blueprint(id, Rocket, d)){
-                            gc.blueprint(id, Rocket, d);
+        if (planet == Earth) {
+            for (int i = 0; i < 8; i++) {
+                Direction d = (Direction) i;
+                // Placing 'em blueprints
+                auto newLocation = unitMapLocation.add(d);
+                if(isOnMap(newLocation) && gc.can_sense_location(newLocation) && gc.is_occupiable(newLocation)) {
+                    double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
+                    macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
+                        if(gc.can_blueprint(id, Factory, d)){
+                            gc.blueprint(id, Factory, d);
                         }
                     });
+                    auto researchInfo = gc.get_research_info();
+                    if (researchInfo.get_level(Rocket) >= 1) {
+                        double factor = 0.01;
+                        if (gc.get_round() > 600) {
+                            factor = 0.5;
+                        }
+                        if (!launchedWorkerCount && !state.typeCount[Rocket]) {
+                            factor += 0.5;
+                        }
+                        double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
+                        macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
+                            if(gc.can_blueprint(id, Rocket, d)){
+                                gc.blueprint(id, Rocket, d);
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -226,7 +229,7 @@ struct BotWorker : BotUnit {
             moveToLocation(nextLocation);
         }
 
-        if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0) && replicateScore > bestMacroObjectScore - 0.1) {
+        if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0 || state.typeCount[Worker] < 8) && replicateScore > bestMacroObjectScore - 0.1) {
             unitMapLocation = nextLocation;
             nextLocation = getNextLocation(unitMapLocation, false);
 
@@ -455,6 +458,32 @@ struct BotHealer : BotUnit {
         double interpolationFactor = 0.99;
         averageHealerSuccessRate = averageHealerSuccessRate * interpolationFactor + succeededHealing * (1-interpolationFactor);
     }
+
+    void doOvercharge() {
+        if (hasOvercharge && unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
+            const auto nearby = gc.sense_nearby_units(unit.get_location().get_map_location(), unit.get_ability_range());
+
+            const Unit* best_unit = nullptr;
+            double best_unit_score = 0;
+
+            for (auto& place : nearby) {
+                if (place.get_health() <= 0) continue;
+                if (place.get_unit_type() != Ranger && place.get_unit_type() != Mage) continue;
+                if (place.get_team() != gc.get_team()) continue;
+                if (place.get_attack_heat() < 20) continue;
+                double score = place.get_attack_heat();
+                if (score > best_unit_score) {
+                    best_unit_score = score;
+                    best_unit = &place;
+                }
+            }
+            if (best_unit != nullptr) {
+                cout << "OVERCHARGE!!!!" << endl;
+                gc.overcharge(unit.get_id(), best_unit->get_id());
+                invalidate_units();
+            }
+        }
+    }
 };
 
 struct BotFactory : BotUnit {
@@ -586,11 +615,14 @@ struct Researcher {
                 break;
         }
         switch(researchInfo.get_level(Healer)) {
-            case 0:
-                scores[Healer] = 9 + 2 * state.typeCount[Healer];
+            case 0: 
+                scores[Healer] = 9 + 2.0 * state.typeCount[Healer];
                 break;
-            case 1:
-                scores[Healer] = 8 + 1.5 * state.typeCount[Healer];
+            case 1: 
+                scores[Healer] = 6 + 1.0 * state.typeCount[Healer];
+                break;
+            case 2: 
+                scores[Healer] = 1.0 * state.typeCount[Healer];
                 break;
         }
         switch(researchInfo.get_level(Worker)) {
@@ -938,6 +970,22 @@ bool tickUnits(bool firstIteration) {
     return anyTickDone;
 }
 
+void doOvercharge() {
+    for (const auto& unit : ourUnits) {
+        auto botunit = unitMap[unit.get_id()];
+        if (botunit == nullptr) {
+            continue;
+        }
+        if (botunit->unit.get_unit_type() != Healer) {
+            continue;
+        }
+        double start = millis();
+        ((BotHealer*)botunit)->doOvercharge();
+        double dt = millis() - start;
+        timeUsed[botunit->unit.get_unit_type()] += dt;
+    }
+}
+
 void executeMacroObjects() {
     sort(macroObjects.rbegin(), macroObjects.rend());
     bestMacroObjectScore = 0;
@@ -965,6 +1013,13 @@ void updateResearch() {
     if (researchInfo.get_queue().size() == 0) {
         auto type = researcher.getBestResearch();
         gc.queue_research(type);
+    }
+}
+
+void updateResearchStatus() {
+    auto researchInfo = gc.get_research_info();
+    if (researchInfo.get_level(Healer) >= 3) {
+        hasOvercharge = true;
     }
 }
 
@@ -1012,6 +1067,7 @@ int main() {
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
+        updateResearchStatus();
         findUnits();
 
         reusableMaps.clear();
@@ -1057,6 +1113,7 @@ int main() {
             auto t2 = millis();
             createUnits();
             bool anyTickDone = tickUnits(firstIteration);
+            if (hasOvercharge) doOvercharge();
             auto t3 = millis();
             cout << "Iteration: " << (t3 - t2) << endl;
 
