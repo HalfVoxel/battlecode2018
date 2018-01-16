@@ -111,12 +111,7 @@ void BotRocket::tick() {
     }
     hasDoneTick = true;
     if(gc.get_planet() == Mars) {
-        auto garrison = unit.get_structure_garrison();
-        for (size_t i = 0; i < garrison.size(); i++) {
-            if (!unloadFrontUnit()) {
-                break;
-            }
-        }
+        while(unloadFrontUnit());
     } else {
         int workerCount = 0;
         for (auto u : unit.get_structure_garrison()) {

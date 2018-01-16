@@ -120,7 +120,11 @@ void BotUnit::moveToLocation(MapLocation nextLocation) {
 }
 
 bool BotUnit::unloadFrontUnit() {
-    BotUnit* u = unitMap[unit.get_structure_garrison()[0]];
+    auto garrison = unit.get_structure_garrison();
+    if (garrison.size() == 0) return false;
+
+    BotUnit* u = unitMap[garrison[0]];
+    assert(u != nullptr);
     auto nextLocation = u->getNextLocation(unit.get_location().get_map_location(), false);
     Direction dir = unit.get_location().get_map_location().direction_to(nextLocation);
     if (gc.can_unload(id, dir)){
@@ -226,6 +230,9 @@ void attack_all_in_range(const Unit& unit) {
 }
 
 PathfindingMap BotUnit::defaultMilitaryTargetMap() {
+    assert(this != nullptr);
+    assert(gc.has_unit(id));
+
     bool isHurt = (unit.get_health() < 0.8 * unit.get_max_health());
     MapReuseObject reuseObject(MapType::Target, unit.get_unit_type(), isHurt);
 
@@ -237,7 +244,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         targetMap = enemyNearbyMap * 0.0001;
 
         for (auto& enemy : enemyUnits) {
-            if (enemy.get_location().is_on_map()) {
+            if (gc.has_unit(enemy.get_id()) && enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
                 if (unit.get_unit_type() == Mage) {
                     targetMap.maxInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
@@ -253,7 +260,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
 
         auto&& initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
         for (auto& enemy : initial_units) {
-            if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
+            if (gc.has_unit(enemy.get_id()) && enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
                 targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], 0.01);
             }
@@ -261,10 +268,12 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
 
         if (isHurt) {
             for (auto& u : ourUnits) {
+                if (!gc.has_unit(u.get_id()) || !u.get_location().is_on_map()) {
+                    continue;
+                }
+
                 if (u.get_unit_type() == Healer) {
-                    if (!u.get_location().is_on_map()) {
-                        continue;
-                    }
+                    
                     auto pos = u.get_location().get_map_location();
                     double factor = 10;
                     if (unit.get_unit_type() == Mage) {
@@ -274,9 +283,6 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                 }
 
                 if (u.get_unit_type() == Factory) {
-                    if (!u.get_location().is_on_map()) {
-                        continue;
-                    }
                     auto pos = u.get_location().get_map_location();
                     targetMap.weights[pos.get_x()][pos.get_y()] += 0.1;
                 }
@@ -284,7 +290,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         }
 
         for (auto& u : ourUnits) {
-            if (u.get_location().is_on_map() && is_structure(u.get_unit_type())) {
+            if (gc.has_unit(u.get_id()) && u.get_location().is_on_map() && is_structure(u.get_unit_type())) {
                 auto pos = u.get_location().get_map_location();
                 targetMap.weights[pos.get_x()][pos.get_y()] = 0;
             }
@@ -292,14 +298,17 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         reusableMaps[reuseObject] = targetMap;
     }
 
-    for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-        auto unit = gc.get_unit(rocketId);
-        if (!unit.get_location().is_on_map()) {
-            continue;
+    if (onEarth) {
+        for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
+            auto unit = gc.get_unit(rocketId);
+            if (!unit.get_location().is_on_map()) {
+                continue;
+            }
+            auto rocketLocation = unit.get_location().get_map_location();
+            targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
         }
-        auto rocketLocation = unit.get_location().get_map_location();
-        targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
     }
+
     return targetMap;
 }
 
