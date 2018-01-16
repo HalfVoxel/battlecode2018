@@ -77,6 +77,8 @@ bool isOnMap(MapLocation location) {
 }
 
 struct BotWorker : BotUnit {
+    int rocketDelay = 0;
+    bool didBuild = false;
     BotWorker(const Unit& unit) : BotUnit(unit) {}
 
 
@@ -104,13 +106,11 @@ struct BotWorker : BotUnit {
             reusableMaps[reuseObject] = targetMap;
         }
 
-        for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-            auto unit = gc.get_unit(rocketId);
-            if(!unit.get_location().is_on_map()) {
-                continue;
-            }
-            auto rocketLocation = unit.get_location().get_map_location();
-            targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
+        // Don't enter a rocket while constructing something
+        if (!didBuild || rocketDelay > 10) {
+            addRocketTarget(unit, targetMap);
+        } else {
+            rocketDelay++;
         }
 
         return targetMap;
@@ -129,6 +129,7 @@ struct BotWorker : BotUnit {
     }
 
     void tick() {
+        didBuild = false;
 
         if (!unit.get_location().is_on_map()) {
             return;
@@ -150,6 +151,7 @@ struct BotWorker : BotUnit {
                 double score = (place.get_health() / (0.0 + place.get_max_health()));
                 macroObjects.emplace_back(score, 0, 1, [=]{
                     if(gc.can_build(id, placeId)) {
+                        didBuild = true;
                         gc.build(id, placeId);
                     }
                 });
@@ -351,15 +353,7 @@ struct BotHealer : BotUnit {
             reusableMaps[reuseObject] = targetMap;
         }
 
-        for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-            auto unit = gc.get_unit(rocketId);
-            if(!unit.get_location().is_on_map()) {
-                continue;
-            }
-            auto rocketLocation = unit.get_location().get_map_location();
-            targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 100;
-        }
-
+        addRocketTarget(unit, targetMap);
 
         return targetMap;
     }
