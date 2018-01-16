@@ -272,7 +272,7 @@ struct BotKnight : BotUnit {
 
         hasDoneTick = true;
 
-        default_military_behaviour();
+        //default_military_behaviour();
     }
 };
 
@@ -292,7 +292,8 @@ struct BotRanger : BotUnit {
 
         hasDoneTick = true;
 
-        default_military_behaviour();
+        //default_military_behaviour();
+        //scheduleAttacks();
     }
 };
 
@@ -312,7 +313,7 @@ struct BotMage : BotUnit {
 
         hasDoneTick = true;
 
-        default_military_behaviour();
+        //default_military_behaviour();
     }
 };
 
@@ -565,6 +566,189 @@ struct BotFactory : BotUnit {
         }
     }
 };
+
+int indexOf(vector<Unit>& units, int unitID) {
+    for (int i = 0; i < units.size(); i++) {
+        if (units[i].get_id() == unitID) return i;
+    }
+    assert(false);
+    exit(1);
+}
+
+void move_units() {
+    for (int i = 0; i < ourUnits.size(); i++) {
+        BotUnit* unit = unitMap[ourUnits[i].get_id()];
+        if (unit != nullptr && gc.is_move_ready(unit->id)) {
+            if (unit->unit.get_location().is_on_map()) {
+                auto nextLocation = unit->getNextLocation();
+                unit->moveToLocation(nextLocation);
+            }
+        }
+    }
+}
+
+void scheduleAttacks() {
+    vector<int> potentialDamageDuringThisTurn(enemyUnits.size());
+    vector<int> potentialDamage(enemyUnits.size());
+    vector<vector<int>> canSee(enemyUnits.size());
+    vector<int> fire(ourUnits.size(), 1);
+    vector<int> enemyPermutation;
+    for (int i = 0; i < enemyUnits.size(); i++) {
+        enemyPermutation.push_back(i);
+    }
+
+    for (int i = 0; i < ourUnits.size(); i++) {
+        auto& unit = ourUnits[i];
+        auto type = unit.get_unit_type();
+        if (type != Ranger && type != Knight && type != Mage) continue;
+        if (!unit.get_location().is_on_map()) continue;
+
+        auto pos = unit.get_map_location();
+        auto maxRange = unit.get_attack_range();
+        auto minRange = unit.get_unit_type() == Ranger ? unit.get_ranger_cannot_attack_range() : 0;
+
+        auto enemies = gc.sense_nearby_units_by_team(unit.get_map_location(), maxRange, enemyTeam);
+        bool ready = gc.is_attack_ready(unit.get_id());
+        int dmg = unit.get_damage();
+
+        for (auto& enemy : enemies) {
+            assert(enemy.get_location().is_on_map());
+
+            int dist = pos.distance_squared_to(enemy.get_map_location());
+            // Note: Minimum range for rangers is inclusive, the distance must be *greater* than the minimum range
+            if (dist <= minRange) continue;
+            assert(dist <= maxRange);
+
+            int id = enemy.get_id();
+            // TODO: Optimize
+            int index = indexOf(enemyUnits, id);
+            canSee[index].push_back(i);
+            potentialDamage[index] += dmg;
+            if (ready) potentialDamageDuringThisTurn[index] += dmg;
+        }
+    }
+
+    // if can kill unit this frame
+    //     fire
+    // if potential to kill unit but not this frame
+    //     don't fire
+
+    for (int i = 0; i < enemyUnits.size(); i++) {
+        auto& enemy = enemyUnits[i];
+        if (gc.has_unit(enemy.get_id())) {
+            assert(enemy.get_location().is_on_map());
+
+            // if (enemy.get_team() == ourTeam) continue;
+
+            // Update unit
+            enemyUnits[i] = gc.get_unit(enemy.get_id());
+
+            auto potential = potentialDamage[i];
+            auto potentialDuringThisTurn = potentialDamageDuringThisTurn[i];
+            bool canKillDuringThisTurn = potentialDuringThisTurn > enemy.get_health();
+            bool canKill = potential > enemy.get_health();
+
+            // All units that can see this one should definitely fire
+            if (canKillDuringThisTurn) for (int unitIndex : canSee[i]) fire[unitIndex] = 2;
+
+            // Units that can see this one shouldn't fire this turn, unless that unit can see a unit that it can kill (see above).
+            // It may not actually kill a unit, but not firing now will screw up phasing.
+            if (canKill && !canKillDuringThisTurn) {
+                for (int unitIndex : canSee[i]) {
+                    if (fire[unitIndex] != 2) fire[unitIndex] = -1;
+                }
+            }
+        }
+    }
+
+    // Sort enemies so that we try to kill the ones which we can do the least potential damage to first
+    // I.e the hardest ones to kill. Hopefully this will allow us to kill more units.
+    sort(enemyPermutation.begin(), enemyPermutation.end(), [&](int a, int b) -> bool {
+        return potentialDamageDuringThisTurn[a] > potentialDamageDuringThisTurn[b];
+    });
+
+    for (int i = 0; i < enemyPermutation.size(); i++) {
+        int index = enemyPermutation[i];
+        auto& enemy = enemyUnits[index];
+        int enemyID = enemy.get_id();
+        if (gc.has_unit(enemyID)) {
+            assert(enemy.get_location().is_on_map());
+
+            // Update unit
+            enemyUnits[index] = gc.get_unit(enemyID);
+
+            int requiredDamage = enemy.get_health();
+            auto damage = 0;
+            for (int unitIndex : canSee[index]) {
+                auto& potentialAttacker = ourUnits[unitIndex];
+                auto id = potentialAttacker.get_id();
+                if (gc.has_unit(id) && gc.is_attack_ready(id)) {
+                    damage += potentialAttacker.get_damage();
+                    if (damage >= requiredDamage) break;
+                }
+            }
+
+            if (damage >= requiredDamage) {
+                // Ha! KIIIIILLLL!
+                for (int unitIndex : canSee[index]) {
+                    auto& potentialAttacker = ourUnits[unitIndex];
+                    auto id = potentialAttacker.get_id();
+                    if (fire[unitIndex] > 0 && gc.has_unit(id) && gc.is_attack_ready(id) && potentialAttacker.get_location().is_on_map()) {
+                        // Update units
+                        ourUnits[unitIndex] = gc.get_unit(id);
+                        enemyUnits[index] = gc.get_unit(enemyID);
+
+                        // More asserts!
+                        assert(enemy.get_location().is_on_map());
+                        assert(enemy.get_map_location().distance_squared_to(potentialAttacker.get_map_location()) <= potentialAttacker.get_attack_range());
+                        if (potentialAttacker.get_unit_type() == Ranger) assert(enemy.get_map_location().distance_squared_to(potentialAttacker.get_map_location()) > potentialAttacker.get_ranger_cannot_attack_range());
+
+                        gc.attack(id, enemyID);
+                        // Don't try to fire anymore
+                        fire[unitIndex] = -1;
+
+                        // Stop when the enemy is killed
+                        if (!gc.has_unit(enemyID)) break;
+                    }
+                }
+            }
+        }
+    }
+
+    for (int i = enemyPermutation.size() - 1; i >= 0; i--) {
+        int index = enemyPermutation[i];
+        auto& enemy = enemyUnits[index];
+        int enemyID = enemy.get_id();
+        if (gc.has_unit(enemyID)) {
+            // Update unit
+            enemyUnits[index] = gc.get_unit(enemyID);
+
+            // Damage as much as possible
+            for (int unitIndex : canSee[index]) {
+                auto& potentialAttacker = ourUnits[unitIndex];
+                auto id = ourUnits[unitIndex].get_id();
+                if (fire[unitIndex] > 0 && gc.has_unit(id) && gc.is_attack_ready(id) && ourUnits[unitIndex].get_location().is_on_map()) {
+                    // Update units
+                    ourUnits[unitIndex] = gc.get_unit(id);
+                    enemyUnits[index] = gc.get_unit(enemyID);
+
+                    assert(enemy.get_location().is_on_map());
+                    assert(enemy.get_map_location().distance_squared_to(potentialAttacker.get_map_location()) <= potentialAttacker.get_attack_range());
+                    if (ourUnits[unitIndex].get_unit_type() == Ranger) assert(enemy.get_map_location().distance_squared_to(potentialAttacker.get_map_location()) > potentialAttacker.get_ranger_cannot_attack_range());
+                    gc.attack(id, enemy.get_id());
+                    // Don't try to fire anymore
+                    fire[unitIndex] = -1;
+
+                    // Stop when the enemy is killed
+                    if (!gc.has_unit(enemy.get_id())) break;
+                }
+            }
+        }
+    }
+
+    invalidate_units();
+    move_units();
+}
 
 void selectTravellersForRocket(Unit& unit) {
     if (!unit.get_location().is_on_map()) {
@@ -960,6 +1144,7 @@ void createUnits() {
         } else {
             botUnitPtr = unitMap[id];
         }
+        assert(botUnitPtr != nullptr);
         botUnitPtr->unit = unit.clone();
     }
 }
@@ -1046,6 +1231,21 @@ void updateResearch() {
     }
 }
 
+#ifdef BACKTRACE
+void handler(int sig) {
+    void *array[10];
+    size_t size;
+
+    // get void*'s for all entries on the stack
+    size = backtrace(array, 10);
+
+    // print out all the frames to stderr
+    fprintf(stderr, "Error: signal %d:\n", sig);
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+    exit(1);
+}
+#endif
+
 void updateResearchStatus() {
     auto researchInfo = gc.get_research_info();
     if (researchInfo.get_level(Healer) >= 3) {
@@ -1073,7 +1273,13 @@ bool computeExistsPathToEnemy() {
 }
 
 int main() {
-    srand(time(0));
+#ifdef BACKTRACE
+    signal(SIGSEGV, handler);
+    signal(6, handler);
+#endif
+
+    //srand(time(0));
+    srand(0);
 
     printf("Player C++ bot starting\n");
     printf("Connecting to manager...\n");
@@ -1164,7 +1370,7 @@ int main() {
         updatePassableMap();
 
         auto t1 = millis();
-        cout << "Preprocessing: " << (t1-t0) << endl;
+        // cout << "Preprocessing: " << (t1-t0) << endl;
 
         bool firstIteration = true;
         while (true) {
@@ -1172,11 +1378,12 @@ int main() {
             createUnits();
             bool anyTickDone = tickUnits(firstIteration, 1 << (int)Healer);
             firstIteration = false;
+            scheduleAttacks();
 
             anyTickDone |= tickUnits(firstIteration);
             if (hasOvercharge) doOvercharge();
             auto t3 = millis();
-            cout << "Iteration: " << (t3 - t2) << endl;
+            // cout << "Iteration: " << (t3 - t2) << endl;
 
             if (!anyTickDone) break;
 
@@ -1187,23 +1394,23 @@ int main() {
         }
 
         auto t5 = millis();
-        cout << "All iterations: " << std::round(t5 - t1) << endl;
+        // cout << "All iterations: " << std::round(t5 - t1) << endl;
         updateResearch();
 
         auto t6 = millis();
-        cout << "Research: " << (t6 - t5) << endl;
+        // cout << "Research: " << (t6 - t5) << endl;
 
-        cout << "Map computation time: " << std::round(mapComputationTime) << endl;
-        cout << "Pathfinding time: " << std::round(pathfindingTime) << endl;
-        cout << "Invalidation time: " << std::round(unitInvalidationTime) << endl;
-        for (auto it : timeUsed) {
-            cout << unitTypeToString[it.first] << ": " << std::round(it.second) << endl;
-        }
+        // cout << "Map computation time: " << std::round(mapComputationTime) << endl;
+        // cout << "Pathfinding time: " << std::round(pathfindingTime) << endl;
+        // cout << "Invalidation time: " << std::round(unitInvalidationTime) << endl;
+        // for (auto it : timeUsed) {
+        //     cout << unitTypeToString[it.first] << ": " << std::round(it.second) << endl;
+        // }
 
         double turnTime = millis() - t0;
-        cout << "Turn time: " << turnTime << endl;
-        totalTurnTime += turnTime;
-        cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
+        // cout << "Turn time: " << turnTime << endl;
+        // totalTurnTime += turnTime;
+        // cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
 
         gc.write_team_array(0, state.totalUnitCount);
 

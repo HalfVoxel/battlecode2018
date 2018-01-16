@@ -27,10 +27,13 @@ map<unsigned, vector<unsigned> > unitShouldGoToRocket;
 void invalidate_units() {
 	auto t0 = millis();
     for (auto& unit : ourUnits) {
-        if (gc.has_unit(unit.get_id())) {
-            unitMap[unit.get_id()]->unit = gc.get_unit(unit.get_id());
+    	auto id = unit.get_id();
+        if (gc.has_unit(id)) {
+        	assert(unitMap[id] != nullptr);
+            unitMap[id]->unit = gc.get_unit(id);
         } else {
-            unitMap[unit.get_id()] = nullptr;
+        	cout << "Removing unit id " << id << endl;
+            unitMap[id] = nullptr;
             // Unit has suddenly disappeared, oh noes!
             // Maybe it went into space or something
         }
