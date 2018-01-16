@@ -22,6 +22,7 @@ using namespace std;
 double averageHealerSuccessRate;
 map<UnitType, double> timeConsumptionByUnit;
 map<UnitType, string> unitTypeToString;
+double bestMacroObjectScore;
 
 
 
@@ -34,6 +35,7 @@ struct State {
     double remainingKarboniteOnEarth;
     int totalRobotDamage;
     int totalUnitCount;
+    int earthTotalUnitCount;
 } state;
 
 struct MacroObject {
@@ -215,15 +217,6 @@ struct BotWorker : BotUnit {
                     });
                 }
             }
-
-            if(gc.can_replicate(id, d)) {
-                macroObjects.emplace_back(replicateScore, unit_type_get_replicate_cost(), 2, [=]{
-                    if(gc.can_replicate(id, d)) {
-                        cout << "Bad replicate" << endl;
-                        gc.replicate(id, d);
-                    }
-                });
-            }
         }
 
         auto nextLocation = unitMapLocation;
@@ -233,7 +226,7 @@ struct BotWorker : BotUnit {
             moveToLocation(nextLocation);
         }
         
-        if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
+        if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0) && replicateScore > bestMacroObjectScore - 0.1) {
             unitMapLocation = nextLocation;
             nextLocation = getNextLocation(unitMapLocation, false);
 
@@ -801,7 +794,7 @@ void updateEnemyInfluenceMaps(){
                 for (int y = 0; y < h; ++y) {
                     int dx = pos.get_x() - x;
                     int dy = pos.get_y() - y;
-                    enemyNearbyMap.weights[x][y] += 0.01 / (dx * dx + dy * dy);
+                    enemyNearbyMap.weights[x][y] += 0.01 / (dx * dx + dy * dy + 5);
                 }
             }
         }
@@ -923,7 +916,7 @@ map<UnitType, double> timeUsed;
 
 bool tickUnits(bool firstIteration) {
     bool anyTickDone = false;
-    for (const auto unit : ourUnits) {
+    for (const auto& unit : ourUnits) {
         auto botunit = unitMap[unit.get_id()];
         if (botunit == nullptr) {
             continue;
@@ -944,6 +937,7 @@ bool tickUnits(bool firstIteration) {
 
 void executeMacroObjects() {
     sort(macroObjects.rbegin(), macroObjects.rend());
+    bestMacroObjectScore = 0;
     bool failedPaying = false;
     for (auto& macroObject : macroObjects) {
         if (macroObject.score <= 0) {
@@ -956,6 +950,7 @@ void executeMacroObjects() {
             macroObject.execute();
         } else {
             failedPaying = true;
+            bestMacroObjectScore = macroObject.score;
         }
     }
     macroObjects.clear();
@@ -1047,6 +1042,7 @@ int main() {
             }
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
+        state.earthTotalUnitCount = gc.get_team_array(Earth)[0];
 
         updatePassableMap();
 
@@ -1079,6 +1075,8 @@ int main() {
         cout << "Turn time: " << turnTime << endl; 
         totalTurnTime += turnTime;
         cout << "Average: " << (totalTurnTime)/gc.get_round() << endl;
+
+        gc.write_team_array(0, state.totalUnitCount);
 
         // this line helps the output logs make more sense by forcing output to be sent
         // to the manager.
