@@ -952,20 +952,33 @@ map<UnitType, double> timeUsed;
 
 bool tickUnits(bool firstIteration) {
     bool anyTickDone = false;
-    for (const auto& unit : ourUnits) {
-        auto botunit = unitMap[unit.get_id()];
-        if (botunit == nullptr) {
-            continue;
-        }
-        if (firstIteration) {
-            botunit->hasDoneTick = false;
-        }
-        if (!botunit->hasDoneTick) {
-            double start = millis();
-            botunit->tick();
-            double dt = millis() - start;
-            timeUsed[botunit->unit.get_unit_type()] += dt;
-            anyTickDone |= botunit->hasDoneTick;
+    for (int iteration = 0; iteration < 2; ++iteration) {
+        for (const auto& unit : ourUnits) {
+            auto unitType = unit.get_unit_type();
+            if (iteration == 0) {
+                if (unitType != Healer) {
+                    continue;
+                }
+            }
+            else {
+                if (unitType == Healer) {
+                    continue;
+                }
+            }
+            auto botunit = unitMap[unit.get_id()];
+            if (botunit == nullptr) {
+                continue;
+            }
+            if (firstIteration) {
+                botunit->hasDoneTick = false;
+            }
+            if (!botunit->hasDoneTick) {
+                double start = millis();
+                botunit->tick();
+                double dt = millis() - start;
+                timeUsed[unitType] += dt;
+                anyTickDone |= botunit->hasDoneTick;
+            }
         }
     }
     return anyTickDone;
