@@ -587,16 +587,185 @@ void move_units() {
     }
 }
 
+// Maximum attack range of any of OUR units
+int maxRangeOfAnyUnit = 0;
+
+bool isMilitary(Unit& unit) {
+    auto type = unit.get_unit_type();
+    return type == Ranger || type == Mage || type == Knight;
+}
+
+void attackStuff(vector<int>& enemyPermutation, map<int, int>& attackerTo2index, vector<int>& fire, bool allowMovement, bool onlyDecisive) {
+    // Our units can shoot, and they can move diagonally for the maximum range
+    int maxRangeToConsider = sqrt(maxRangeOfAnyUnit) + 2;
+    maxRangeToConsider *= maxRangeToConsider;
+
+    for (int i = 0; i < enemyUnits.size(); i++) {
+        auto& enemy = enemyUnits[enemyPermutation[i]];
+        if (!gc.has_unit(enemy.get_id())) continue;
+
+        auto enemyPos = enemy.get_map_location();
+        // Try to kill this unit decisively
+        auto attackers = gc.sense_nearby_units_by_team(enemy.get_map_location(), maxRangeToConsider, ourTeam);
+        int potentialDamageThisTurn = 0;
+        int potentialDamage = 0;
+
+        if (onlyDecisive) {
+            for (auto& attacker : attackers) {
+                if (!isMilitary(attacker)) continue;
+                int& doFire = fire[attackerTo2index[attacker.get_id()]];
+
+                // Already fired this turn, ignore it
+                if (doFire == 2) continue;
+
+                auto maxRange = attacker.get_attack_range();
+                auto minRange = attacker.get_unit_type() == Ranger ? attacker.get_ranger_cannot_attack_range() : 0;
+                int dist = enemyPos.distance_squared_to(attacker.get_map_location());
+                if (dist <= maxRange && dist > minRange) {
+                    // Can attack! Yay
+                    potentialDamageThisTurn += gc.is_attack_ready(attacker.get_id()) ? attacker.get_damage() : 0;
+                    potentialDamage += attacker.get_damage();
+                } else if (allowMovement && gc.is_move_ready(attacker.get_id())) {
+                    // Ah, cannot reach the unit. Maybe try moving a bit?
+                    for (int d = 0; d < 8; d++) {
+                        auto movePos = attacker.get_map_location().add((Direction)d);
+                        auto dist2 = enemyPos.distance_squared_to(movePos);
+                        if (dist2 <= maxRange && dist2 > minRange) {
+                            // Yay! We can attack from over here, let's move there
+                            if (gc.can_move(attacker.get_id(), (Direction)d)) {
+                                potentialDamageThisTurn += gc.is_attack_ready(attacker.get_id()) ? attacker.get_damage() : 0;
+                                potentialDamage += attacker.get_damage();
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (potentialDamageThisTurn >= enemy.get_health()) {
+                cerr << "Taking down a " << unitTypeToString[enemy.get_unit_type()] << endl;
+
+                // Kill!
+                for (auto& attacker : attackers) {
+                    // If the enemy is dead, then stop attacking
+                    if (!gc.has_unit(enemy.get_id())) break;
+
+                    // Mage splash might kill attackers
+                    if (!gc.has_unit(attacker.get_id())) continue;
+
+                    if (!isMilitary(attacker)) continue;
+
+                    // Make sure the attacker can actually attack
+                    if (!gc.is_attack_ready(attacker.get_id())) continue;
+
+                    int& doFire = fire[attackerTo2index[attacker.get_id()]];
+
+                    // Already fired this turn, ignore it
+                    if (doFire == 2) continue;
+
+                    auto maxRange = attacker.get_attack_range();
+                    auto minRange = attacker.get_unit_type() == Ranger ? attacker.get_ranger_cannot_attack_range() : 0;
+                    int dist = enemyPos.distance_squared_to(attacker.get_map_location());
+                    if (dist <= maxRange && dist > minRange) {
+                        gc.attack(attacker.get_id(), enemy.get_id());
+                        doFire = 2;
+                    } else if (allowMovement && gc.is_move_ready(attacker.get_id()) && attacker.get_health() > attacker.get_max_health() * 0.5f) {
+                        // Ah, cannot reach the unit. Maybe try moving a bit?
+                        // Note: if multiple attackers want to move to the same spot, we may not end up killing the unit
+                        bool anyDir = false;
+                        for (int d = 0; d < 8; d++) {
+                            auto movePos = attacker.get_map_location().add((Direction)d);
+                            auto dist2 = enemyPos.distance_squared_to(movePos);
+                            if (dist2 <= maxRange && dist2 > minRange) {
+                                // Yay! We can attack from over here, let's move there
+                                if (gc.can_move(attacker.get_id(), (Direction)d)) {
+                                    anyDir = true;
+                                    cerr << "Move+attack successfull" << endl;
+                                    gc.move_robot(attacker.get_id(), (Direction)d);
+                                    gc.attack(attacker.get_id(), enemy.get_id());
+                                    doFire = 2;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!anyDir) cerr << "Move+attack failed" << endl;
+                    }
+                }
+
+                if (gc.has_unit(enemy.get_id())) {
+                    cerr << "Takedown failed!" << endl;
+                }
+            } else if (potentialDamage >= enemy.get_health()) {
+                for (auto& attacker : attackers) {
+                    int& doFire = fire[attackerTo2index[attacker.get_id()]];
+
+                    // Already fired this turn, ignore it
+                    if (doFire == 2) continue;
+
+                    // Avoid firing wildly, instead sync up with nearby allies unless it has a very low health (likely to get killed)
+                    if (attacker.get_health() < 0.5 * attacker.get_max_health()) {
+                        doFire = -1;
+                    }
+                }
+                
+            }
+        } else {
+            // Fire wildly at this unit
+            for (auto& attacker : attackers) {
+                if (!isMilitary(attacker)) continue;
+
+                int& doFire = fire[attackerTo2index[attacker.get_id()]];
+                // Unit should avoid firing wildly, or it has already fired during this turn. Ignore
+                if (doFire == -1 || doFire == 2) continue;
+
+                if (gc.has_unit(attacker.get_id()) && gc.can_attack(attacker.get_id(), enemy.get_id()) && gc.is_attack_ready(attacker.get_id())) {
+                    gc.attack(attacker.get_id(), enemy.get_id());
+                    doFire = 2;
+                }
+            }
+        }
+    }
+}
+
+float attack_value(Unit& unit, float* values) {
+    float fractional_health = unit.get_health() / (float)unit.get_max_health();
+    float value = values[unit.get_unit_type()] / fractional_health;
+    value *= value;
+    return value;
+}
+
 void scheduleAttacks() {
     vector<int> potentialDamageDuringThisTurn(enemyUnits.size());
     vector<int> potentialDamage(enemyUnits.size());
     vector<vector<int>> canSee(enemyUnits.size());
     vector<int> fire(ourUnits.size(), 1);
     vector<int> enemyPermutation;
+    map<int, int> attackerTo2index;
     for (int i = 0; i < enemyUnits.size(); i++) {
         enemyPermutation.push_back(i);
     }
+    for (int i = 0; i < ourUnits.size(); i++) {
+        attackerTo2index[ourUnits[i].get_id()] = i;
+    }
+    
 
+    // Sort enemies so that we try to kill the ones which we can do the least potential damage to first
+    // I.e the hardest ones to kill. Hopefully this will allow us to kill more units.
+    sort(enemyPermutation.begin(), enemyPermutation.end(), [&](int a, int b) -> bool {
+        return attack_value(enemyUnits[a], unit_strategic_value) > attack_value(enemyUnits[b], unit_strategic_value); // unit_strategic_value[enemyUnits[a].get_unit_type()] < unit_strategic_value[enemyUnits[b].get_unit_type()]; // potentialDamageDuringThisTurn[a] > potentialDamageDuringThisTurn[b];
+    });
+
+    // Phase 1: Attack enemy units that we can definitely kill without moving
+    attackStuff(enemyPermutation, attackerTo2index, fire, false, true);
+
+    // Phase 2: Attack enemy units that we can definitely kill by moving
+    attackStuff(enemyPermutation, attackerTo2index, fire, true, true);
+
+    // Phase 3: Attack enemies as much as possible, unless the attacker can see an enemy that it could kill if it waits for sync
+    attackStuff(enemyPermutation, attackerTo2index, fire, false, false);
+
+
+    /*
     for (int i = 0; i < ourUnits.size(); i++) {
         auto& unit = ourUnits[i];
         auto type = unit.get_unit_type();
@@ -661,11 +830,8 @@ void scheduleAttacks() {
         }
     }
 
-    // Sort enemies so that we try to kill the ones which we can do the least potential damage to first
-    // I.e the hardest ones to kill. Hopefully this will allow us to kill more units.
-    sort(enemyPermutation.begin(), enemyPermutation.end(), [&](int a, int b) -> bool {
-        return potentialDamageDuringThisTurn[a] > potentialDamageDuringThisTurn[b];
-    });
+    //auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
+    auto& values = unit_strategic_value;
 
     for (int i = 0; i < enemyPermutation.size(); i++) {
         int index = enemyPermutation[i];
@@ -715,7 +881,8 @@ void scheduleAttacks() {
         }
     }
 
-    for (int i = enemyPermutation.size() - 1; i >= 0; i--) {
+    //for (int i = enemyPermutation.size() - 1; i >= 0; i--) {
+    for (int i = 0; i < enemyPermutation.size(); i++) {
         int index = enemyPermutation[i];
         auto& enemy = enemyUnits[index];
         int enemyID = enemy.get_id();
@@ -744,7 +911,7 @@ void scheduleAttacks() {
                 }
             }
         }
-    }
+    }*/
 
     invalidate_units();
     move_units();
@@ -1337,6 +1504,11 @@ int main() {
 
         updateResearchStatus();
         findUnits();
+
+        maxRangeOfAnyUnit = 0;
+        for (auto& unit : ourUnits) {
+            if (isMilitary(unit)) maxRangeOfAnyUnit = max(maxRangeOfAnyUnit, (int)unit.get_attack_range());
+        }
 
         reusableMaps.clear();
         updateAsteroids();
