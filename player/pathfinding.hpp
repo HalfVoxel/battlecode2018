@@ -13,7 +13,7 @@
 #include <algorithm>
 #include <queue>
 
-#include "bc.hpp"
+#include "common.h"
 
 using namespace bc;
 using namespace std;
@@ -234,6 +234,12 @@ struct PathfindingMap {
     }
 };
     
+vector<vector<double> > cost(MAX_MAP_SIZE, vector<double>(MAX_MAP_SIZE));
+vector<vector<int> > version(MAX_MAP_SIZE, vector<int>(MAX_MAP_SIZE));
+vector<vector<Position> > parent(MAX_MAP_SIZE, vector<Position>(MAX_MAP_SIZE));
+priority_queue<PathfindingEntry> pq;
+int pathfindingVersion = 0;
+
 struct Pathfinder {
 
     double bestScore;
@@ -241,20 +247,25 @@ struct Pathfinder {
     MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
         int w = values.w;
         int h = values.h;
-        vector<vector<double> > cost(w, vector<double>(h, numeric_limits<double>::infinity()));
-        vector<vector<Position> > parent(w, vector<Position>(h));
+
+        // Make sure map is sane
+        assert(w <= MAX_MAP_SIZE);
+        assert(h <= MAX_MAP_SIZE);
+
+        pathfindingVersion++;
     
-        priority_queue<PathfindingEntry> pq;
         int dx[8]={1,1,1,0,0,-1,-1,-1};
         int dy[8]={1,0,-1,1,-1,1,0,-1};
-        auto averageScore = [&values, &cost](Position pos) {
+        auto averageScore = [&values](Position pos) {
             return values.weights[pos.x][pos.y] / (cost[pos.x][pos.y] + 1.0);
         };
-        Position bestPosition(from.get_x(), from.get_y());
-        cost[from.get_x()][from.get_y()] = costs.weights[from.get_x()][from.get_y()];
+        int x0 = from.get_x(), y0 = from.get_y();
+        Position bestPosition(x0, y0);
+        cost[x0][y0] = costs.weights[x0][y0];
         bestScore = averageScore(bestPosition);
         pq.push(PathfindingEntry(0.0, bestPosition));
-        cost[from.get_x()][from.get_y()] = 0;
+        cost[x0][y0] = 0;
+        version[x0][y0] = pathfindingVersion;
 
         double valueUpperBound = values.getMax();
     
@@ -269,7 +280,7 @@ struct Pathfinder {
                 break;
             }
             auto currentScore = averageScore(currentPos);
-            if (currentScore > bestScore && (currentPos.x != from.get_x() || currentPos.y != from.get_y())) {
+            if (currentScore > bestScore && (currentPos.x != x0 || currentPos.y != y0)) {
                 bestPosition = currentPos;
                 bestScore = currentScore;
             }
@@ -280,22 +291,27 @@ struct Pathfinder {
                     continue;
                 }
                 double newCost = currentEntry.cost + costs.weights[x][y];
-                if (newCost < cost[x][y]) {
+                if (newCost < cost[x][y] || version[x][y] != pathfindingVersion) {
                     cost[x][y] = newCost;
                     parent[x][y] = currentPos;
+                    version[x][y] = pathfindingVersion;
                     pq.push(PathfindingEntry(newCost, Position(x, y)));
                 }
             }
         }
+
+        // Clear queue (required as it is reused for the next pathfinding call)
+        while(!pq.empty()) pq.pop();
+
         Position currentPos = bestPosition;
-        if (currentPos.x == from.get_x() && currentPos.y == from.get_y()) {
+        if (currentPos.x == x0 && currentPos.y == y0) {
             return MapLocation(from.get_planet(), currentPos.x, currentPos.y);
         }
         vector<Position> path = {currentPos};
         while (true) {
             auto p = parent[currentPos.x][currentPos.y];
             path.push_back(p);
-            if (p.x == from.get_x() && p.y == from.get_y()) {
+            if (p.x == x0 && p.y == y0) {
                 break;
             }
             currentPos = p;

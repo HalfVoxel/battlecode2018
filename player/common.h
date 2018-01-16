@@ -9,6 +9,7 @@
 
 #include "bc.hpp"
 
+#define MAX_MAP_SIZE 50
 typedef std::pair<int,int> pii;
 
 struct BotUnit;
