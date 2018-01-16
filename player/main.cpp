@@ -141,13 +141,13 @@ struct BotWorker : BotUnit {
 
         const unsigned id = unit.get_id();
 
-        for (auto place : nearby) {
+        for (auto& place : nearby) {
             //Building 'em blueprints
             if(gc.can_build(id, place.get_id())) {
                 const int& placeId = place.get_id();
                 double score = (place.get_health() / (0.0 + place.get_max_health()));
                 macroObjects.emplace_back(score, 0, 1, [=]{
-                    if(gc.can_build(id, place.get_id())) {
+                    if(gc.can_build(id, placeId)) {
                         gc.build(id, placeId);
                     }
                 });
@@ -156,7 +156,7 @@ struct BotWorker : BotUnit {
                 const int& placeId = place.get_id();
                 double score = 2 - (place.get_health() / (0.0 + place.get_max_health()));
                 macroObjects.emplace_back(score, 0, 1, [=]{
-                    if(gc.can_repair(id, place.get_id())) {
+                    if(gc.can_repair(id, placeId)) {
                         gc.repair(id, placeId);
                     }
                 });
@@ -164,7 +164,7 @@ struct BotWorker : BotUnit {
         }
 
         double bestHarvestScore = -1;
-        Direction bestHarvestDirection;
+        Direction bestHarvestDirection = Center;
         for (int i = 0; i < 9; ++i) {
             auto d = (Direction) i;
             if (gc.can_harvest(id, d)) {
@@ -619,7 +619,7 @@ struct Researcher {
                 break;
         }
 
-        UnitType bestType;
+        UnitType bestType = Mage;
         double bestScore = 0;
         for (auto it : scores) {
             if (it.second > bestScore) {
@@ -637,16 +637,19 @@ void findUnits() {
     ourTeam = gc.get_team();
     enemyTeam = (Team)(1 - (int)gc.get_team());
 
-    allUnits = vector<Unit>();
-    enemyUnits = vector<Unit>();
+    allUnits.clear();
+    enemyUnits.clear();
     for (int team = 0; team < 2; team++) {
         if (team != ourTeam) {
             auto u = gc.sense_nearby_units_by_team(MapLocation(planet, 0, 0), 1000000, (Team)team);
-            enemyUnits.insert(enemyUnits.end(), u.begin(), u.end());
+            for (auto& unit : u)
+                enemyUnits.emplace_back(move(unit));
         }
     }
-    allUnits.insert(allUnits.end(), ourUnits.begin(), ourUnits.end());
-    allUnits.insert(allUnits.end(), enemyUnits.begin(), enemyUnits.end());
+    for (auto& unit : ourUnits)
+        allUnits.push_back(unit.clone());
+    for (auto& unit : enemyUnits)
+        allUnits.push_back(unit.clone());
 }
 
 void updateAsteroids() {
@@ -786,7 +789,7 @@ void updateEnemyInfluenceMaps(){
         }
     }
 
-    auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
+    auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
     for (auto& enemy : initial_units) {
         if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
             auto pos = enemy.get_location().get_map_location();
@@ -864,12 +867,12 @@ void updatePassableMap() {
         }
     }
 
-    for (const auto unit : enemyUnits) {
+    for (const auto& unit : enemyUnits) {
         auto unitMapLocation = unit.get_location().get_map_location();
         passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
     }
 
-    for (const auto unit : ourUnits) {
+    for (const auto& unit : ourUnits) {
         if (unit.get_location().is_on_map()) {
             auto unitMapLocation = unit.get_location().get_map_location();
             if (is_robot(unit.get_unit_type())) {
@@ -883,10 +886,10 @@ void updatePassableMap() {
 }
 
 void createUnits() {
-    for (const auto unit : ourUnits) {
+    for (const auto& unit : ourUnits) {
         assert(gc.has_unit(unit.get_id()));
         const unsigned id = unit.get_id();
-        BotUnit* botUnitPtr;
+        BotUnit* botUnitPtr = nullptr;
 
         if (unitMap.find(id) == unitMap.end()) {
             switch(unit.get_unit_type()) {
@@ -908,7 +911,7 @@ void createUnits() {
         } else {
             botUnitPtr = unitMap[id];
         }
-        botUnitPtr->unit = unit;
+        botUnitPtr->unit = unit.clone();
     }
 }
 

@@ -10,12 +10,13 @@ elif [ "$BC_PLATFORM" = 'DARWIN' ]; then
     LIBRARIES="-lbattlecode-darwin -lSystem -lresolv -lc -lm -L../battlecode/c/lib"
     INCLUDES="-I../battlecode/c/include -I."
 else
-	echo "Unknown platform '$BC_PLATFORM' or platform not set"
-	echo "Make sure the BC_PLATFORM environment variable is set"
-	exit 1
+    echo "Unknown platform '$BC_PLATFORM' or platform not set"
+    echo "Make sure the BC_PLATFORM environment variable is set"
+    exit 1
 fi
 
-g++ -std=c++11 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+# g++ -std=c++11 -O2 -rdynamic everything.cpp -DNDEBUG -o main $LIBRARIES $INCLUDES
 
 # run the program!
 time ./main

@@ -251,7 +251,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
             }
         }
         
-        auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
+        auto&& initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
         for (auto& enemy : initial_units) {
             if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
                 auto pos = enemy.get_location().get_map_location();
