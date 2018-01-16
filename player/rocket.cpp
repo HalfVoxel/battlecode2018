@@ -49,6 +49,7 @@ pair<bool,MapLocation> find_best_landing_spot() {
             if (marsMap.is_passable_terrain_at(MapLocation(Mars, x, y))) {
                 stack<pii> que;
                 que.push(pii(x,y));
+                searched[x][y] = true;
                 int totalResources = 0;
                 int totalArea = 0;
 
@@ -59,10 +60,10 @@ pair<bool,MapLocation> find_best_landing_spot() {
                 while(!que.empty()) {
                     auto p = que.top();
                     que.pop();
-                    totalResources += karb[x][y];
+                    totalResources += karb[p.first][p.second];
                     totalArea += 1;
 
-                    float nodeScore = -karb[x][y];
+                    float nodeScore = -karb[p.first][p.second];
                     if (nodeScore > inRegionScore) {
                         inRegionScore = nodeScore;
                         bestInRegion = p;
@@ -77,8 +78,8 @@ pair<bool,MapLocation> find_best_landing_spot() {
 
                     for (int dx = -1; dx <= 1; dx++) {
                         for (int dy = -1; dy <= 1; dy++) {
-                            int nx = x + dx;
-                            int ny = y + dy;
+                            int nx = p.first + dx;
+                            int ny = p.second + dy;
                             if (nx >= 0 && ny >= 0 && nx < w && ny < h && !searched[nx][ny]) {
                                 searched[nx][ny] = true;
                                 if (marsMap.is_passable_terrain_at(MapLocation(Mars, nx, ny))) {
@@ -88,6 +89,8 @@ pair<bool,MapLocation> find_best_landing_spot() {
                         }
                     }
                 }
+
+                cerr << "Area: " << totalArea << " Resources: " << totalResources << " best spot " << bestInRegion.first << " " << bestInRegion.second << " with score " << inRegionScore << endl;
 
                 float score = totalResources + totalArea * 0.001f;
                 if (score > bestScore) {
