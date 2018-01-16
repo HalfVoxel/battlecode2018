@@ -1,0 +1,9 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+			"folder_exclude_patterns": ["backups", "examplefuncsplayer*", "bc18-scaffold", "custom-battlecode", "battlecode-2018-cpp-api", "battlecode-2018/bp", "working_dir"],
+		}
+	]
+}

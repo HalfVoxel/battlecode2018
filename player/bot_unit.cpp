@@ -58,7 +58,7 @@ MapLocation BotUnit::getNextLocation(MapLocation from, bool allowStructures) {
         }
         return from;
     }
-    time_t start = clock();
+    double start = millis();
     auto targetMap = getTargetMap();
     auto costMap = getCostMap();
     if (allowStructures) {
@@ -79,12 +79,12 @@ MapLocation BotUnit::getNextLocation(MapLocation from, bool allowStructures) {
             }
         }
     }
-    mapComputationTime += (clock() - start + 0.0) / CLOCKS_PER_SEC;
-    start = clock();
+    mapComputationTime += millis() - start;
+    start = millis();
     Pathfinder pathfinder;
     auto nextLocation = pathfinder.getNextLocation(from, targetMap, costMap);
     pathfindingScore = pathfinder.bestScore;
-    pathfindingTime += (clock() - start + 0.0) / CLOCKS_PER_SEC;
+    pathfindingTime += millis() - start;
 
     return nextLocation;
 }
@@ -151,7 +151,7 @@ void mage_attack(const Unit& unit) {
     for (auto& place : nearby) {
         if (place.get_health() <= 0) continue;
         if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
-        
+
         float fractional_health = place.get_health() / (float)place.get_max_health();
         float value = values[place.get_unit_type()] / (fractional_health + 2.0);
         if (place.get_team() == unit.get_team()) value = -value;
@@ -171,7 +171,7 @@ void mage_attack(const Unit& unit) {
     for (auto& place : nearby) {
         if (place.get_health() <= 0) continue;
         if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
-        
+
         auto location = place.get_location().get_map_location();
         double score = hitScore[location.get_x()][location.get_y()];
         if (score > best_unit_score) {
@@ -250,7 +250,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                 }
             }
         }
-        
+
         auto initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
         for (auto& enemy : initial_units) {
             if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
@@ -291,7 +291,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         }
         reusableMaps[reuseObject] = targetMap;
     }
-        
+
     for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
         auto unit = gc.get_unit(rocketId);
         if (!unit.get_location().is_on_map()) {
