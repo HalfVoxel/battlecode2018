@@ -14,6 +14,9 @@ typedef std::pair<int,int> pii;
 
 struct BotUnit;
 
+extern bool onMars;
+extern bool onEarth;
+
 extern bc::GameController gc;
 
 extern std::vector<bc::Unit> ourUnits;

@@ -13,6 +13,9 @@ double mapComputationTime;
 double unitInvalidationTime;
 map<unsigned int, BotUnit*> unitMap;
 
+bool onMars;
+bool onEarth;
+
 Team ourTeam;
 Team enemyTeam;
 

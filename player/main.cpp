@@ -1308,6 +1308,10 @@ int main() {
     planetMap = &gc.get_starting_planet(gc.get_planet());
     w = planetMap->get_width();
     h = planetMap->get_height();
+
+    onMars = planet == Mars;
+    onEarth = planet == Earth;
+
     initKarboniteMap();
     initInfluence();
 
