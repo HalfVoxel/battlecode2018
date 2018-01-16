@@ -537,9 +537,9 @@ void selectTravellersForRocket(Unit& unit) {
     if (unit.get_location().get_map_location().get_planet() == Mars) {
         return;
     }
-	if (!unit.structure_is_built()) {
+    if (!unit.structure_is_built()) {
         return;
-	}
+    }
     bool hasWorker = false;
     for (auto id : unit.get_structure_garrison()) {
         auto u = gc.get_unit(id);

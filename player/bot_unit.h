@@ -10,6 +10,7 @@ struct BotUnit {
     bool hasDoneTick;
     bool isRocketFodder;
     BotUnit(const bc::Unit& unit) : unit(unit), id(unit.get_id()), hasDoneTick(false), isRocketFodder(false) {}
+    virtual ~BotUnit() {}
     virtual void tick();
     virtual PathfindingMap getTargetMap();
     virtual PathfindingMap getCostMap();

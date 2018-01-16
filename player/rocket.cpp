@@ -87,12 +87,12 @@ pair<bool,MapLocation> find_best_landing_spot() {
                             }
                         }
                     }
+                }
 
-                    float score = totalResources + totalArea * 0.001f;
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestLandingSpot = MapLocation(Mars, bestInRegion.first, bestInRegion.second);
-                    }
+                float score = totalResources + totalArea * 0.001f;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestLandingSpot = MapLocation(Mars, bestInRegion.first, bestInRegion.second);
                 }
             }
         }
