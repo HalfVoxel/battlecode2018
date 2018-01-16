@@ -244,6 +244,60 @@ struct Pathfinder {
 
     double bestScore;
 
+    bool existsPathToLocation(const MapLocation& from, const MapLocation& to, const PathfindingMap& costs) {
+        int w = costs.w;
+        int h = costs.h;
+        // Make sure map is sane
+        assert(w <= MAX_MAP_SIZE);
+        assert(h <= MAX_MAP_SIZE);
+
+        pathfindingVersion++;
+    
+        int dx[8]={1,1,1,0,0,-1,-1,-1};
+        int dy[8]={1,0,-1,1,-1,1,0,-1};
+        int x0 = from.get_x(), y0 = from.get_y();
+        Position bestPosition(x0, y0);
+        pq.push(PathfindingEntry(0.0, bestPosition));
+        cost[x0][y0] = 0;
+        version[x0][y0] = pathfindingVersion;
+
+        int tox = to.get_x();
+        int toy = to.get_y();
+        bool hasPath = false;
+
+        while (!pq.empty()) {
+            auto currentEntry = pq.top();
+            auto currentPos = currentEntry.pos;
+            if (currentPos.x == tox && currentPos.y == toy) {
+                hasPath = true;
+                break;
+            }
+            pq.pop();
+            if (currentEntry.cost > cost[currentPos.x][currentPos.y]) {
+                continue;
+            }
+            for (int i = 0; i < 8; i++) {
+                int x = currentPos.x + dx[i];
+                int y = currentPos.y + dy[i];
+                if (x < 0 || x >= w || y < 0 || y >= h) {
+                    continue;
+                }
+                double newCost = currentEntry.cost + costs.weights[x][y];
+                if (newCost < cost[x][y] || (version[x][y] != pathfindingVersion && newCost < numeric_limits<double>::infinity())) {
+                    cost[x][y] = newCost;
+                    parent[x][y] = currentPos;
+                    version[x][y] = pathfindingVersion;
+                    pq.push(PathfindingEntry(newCost, Position(x, y)));
+                }
+            }
+        }
+
+        // Clear queue (required as it is reused for the next pathfinding call)
+        while(!pq.empty()) pq.pop();
+
+        return hasPath;
+    }
+
     MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
         int w = values.w;
         int h = values.h;

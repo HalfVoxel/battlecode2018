@@ -24,6 +24,7 @@ map<UnitType, double> timeConsumptionByUnit;
 map<UnitType, string> unitTypeToString;
 bool hasOvercharge;
 double bestMacroObjectScore;
+bool existsPathToEnemy;
 
 
 
@@ -196,7 +197,11 @@ struct BotWorker : BotUnit {
                 // Placing 'em blueprints
                 auto newLocation = unitMapLocation.add(d);
                 if(isOnMap(newLocation) && gc.can_sense_location(newLocation) && gc.is_occupiable(newLocation)) {
+                    int x = newLocation.get_x();
+                    int y = newLocation.get_y();
                     double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
+                    score -= karboniteMap.weights[x][y] * 0.001;
+                    score -= workerProximityMap.weights[x][y] * 0.001;
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
                         if(gc.can_blueprint(id, Factory, d)){
                             gc.blueprint(id, Factory, d);
@@ -206,12 +211,17 @@ struct BotWorker : BotUnit {
                     if (researchInfo.get_level(Rocket) >= 1) {
                         double factor = 0.01;
                         if (gc.get_round() > 600) {
-                            factor = 0.5;
+                            factor = 0.2;
                         }
                         if (!launchedWorkerCount && !state.typeCount[Rocket]) {
                             factor += 0.5;
                         }
+                        if (!existsPathToEnemy) {
+                            factor += 0.2;
+                        }
                         double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
+                        score -= karboniteMap.weights[x][y] * 0.001;
+                        score -= workerProximityMap.weights[x][y] * 0.001;
                         macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
                             if(gc.can_blueprint(id, Rocket, d)){
                                 gc.blueprint(id, Rocket, d);
@@ -318,7 +328,7 @@ struct BotHealer : BotUnit {
             targetMap = reusableMaps[reuseObject];
         }
         else {
-            targetMap = PathfindingMap(w, h);
+            targetMap = enemyNearbyMap * 0.0001;
             for (auto& u : ourUnits) {
                 if (!u.get_location().is_on_map()) {
                     continue;
@@ -513,6 +523,9 @@ struct BotFactory : BotUnit {
             if (state.typeCount[Worker] == 0 && (researchInfo.get_level(Rocket) >= 1 || state.typeCount[Factory] < 3)) {
                 score += 10;
             }
+            if (gc.get_round() > 600 && state.typeCount[Worker] < 5) {
+                score += 10;
+            }
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Worker), 2, [=] {
                 if (gc.can_produce_robot(id, Worker)) {
                     gc.produce_robot(id, Worker);
@@ -643,6 +656,9 @@ struct Researcher {
         switch(researchInfo.get_level(Rocket)) {
             case 0:
                 scores[Rocket] = 7;
+                if (!existsPathToEnemy) {
+                    scores[Rocket] = 1000;
+                }
                 break;
             case 1:
                 scores[Rocket] = 6;
@@ -1037,6 +1053,25 @@ void updateResearchStatus() {
     }
 }
 
+bool computeExistsPathToEnemy() {
+    Pathfinder pathfinder;
+    auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
+    for (auto& enemy : initial_units) {
+        if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
+            auto pos = enemy.get_location().get_map_location();
+            for (auto& unit : initial_units) {
+                if (unit.get_team() != enemyTeam && unit.get_location().is_on_map()) {
+                    auto pos2 = unit.get_location().get_map_location();
+                    if (pathfinder.existsPathToLocation(pos2, pos, passableMap)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 int main() {
     srand(time(0));
 
@@ -1069,6 +1104,15 @@ int main() {
     h = planetMap->get_height();
     initKarboniteMap();
     initInfluence();
+
+    updatePassableMap();
+    existsPathToEnemy = computeExistsPathToEnemy();
+    if (!existsPathToEnemy) {
+        cout << "There doesn't exist a path to the enemy!" << endl;
+    }
+    else {
+        cout << "There exists a path to the enemy!" << endl;
+    }
 
     enemyPositionMap = PathfindingMap(w, h);
 
