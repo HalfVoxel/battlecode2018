@@ -113,7 +113,7 @@ struct BotWorker : BotUnit {
 
         return targetMap;
     }
-        
+
     PathfindingMap getCostMap() {
         MapReuseObject reuseObject(MapType::Cost, unit.get_unit_type(), false);
         if (reusableMaps.count(reuseObject)) {
@@ -220,12 +220,12 @@ struct BotWorker : BotUnit {
         }
 
         auto nextLocation = unitMapLocation;
-        
+
         if (gc.is_move_ready(unit.get_id())) {
             auto nextLocation = getNextLocation();
             moveToLocation(nextLocation);
         }
-        
+
         if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0) && replicateScore > bestMacroObjectScore - 0.1) {
             unitMapLocation = nextLocation;
             nextLocation = getNextLocation(unitMapLocation, false);
@@ -328,7 +328,7 @@ struct BotHealer : BotUnit {
                     if (remainingLife == 1.0) {
                         continue;
                     }
-                        
+
                     auto uMapLocation = u.get_location().get_map_location();
 
                     targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 15 * (2.0 - remainingLife));
@@ -337,7 +337,7 @@ struct BotHealer : BotUnit {
             targetMap /= (enemyNearbyMap + 1.0);
             reusableMaps[reuseObject] = targetMap;
         }
-        
+
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
             auto unit = gc.get_unit(rocketId);
             if(!unit.get_location().is_on_map()) {
@@ -370,7 +370,7 @@ struct BotHealer : BotUnit {
                     if (remainingLife == 1.0) {
                         continue;
                     }
-                        
+
                     auto uMapLocation = u.get_location().get_map_location();
 
                     if (u.get_unit_type() == Healer) {
@@ -378,7 +378,7 @@ struct BotHealer : BotUnit {
                     }
                 }
             }
-            
+
             auto costMap = passableMap + healerProximityMap + enemyInfluenceMap;
             reusableMaps[reuseObject] = costMap;
             return costMap;
@@ -575,10 +575,10 @@ struct Researcher {
 
         auto researchInfo = gc.get_research_info();
         switch(researchInfo.get_level(Ranger)) {
-            case 0: 
+            case 0:
                 scores[Ranger] = 10 + 0.1 * state.typeCount[Ranger];
                 break;
-            case 1: 
+            case 1:
                 scores[Ranger] = 5 + 0.1 * state.typeCount[Ranger];
                 break;
             case 2:
@@ -586,35 +586,35 @@ struct Researcher {
                 break;
         }
         switch(researchInfo.get_level(Healer)) {
-            case 0: 
+            case 0:
                 scores[Healer] = 9 + 2 * state.typeCount[Healer];
                 break;
-            case 1: 
+            case 1:
                 scores[Healer] = 8 + 1.5 * state.typeCount[Healer];
                 break;
         }
         switch(researchInfo.get_level(Worker)) {
-            case 0: 
+            case 0:
                 scores[Worker] = 5;
                 break;
-            case 1: 
+            case 1:
                 scores[Worker] = 3;
                 break;
-            case 2: 
+            case 2:
                 scores[Worker] = 3;
                 break;
-            case 3: 
+            case 3:
                 scores[Worker] = 6;
                 break;
         }
         switch(researchInfo.get_level(Rocket)) {
-            case 0: 
+            case 0:
                 scores[Rocket] = 7;
                 break;
-            case 1: 
+            case 1:
                 scores[Rocket] = 6;
                 break;
-            case 2: 
+            case 2:
                 scores[Rocket] = 6;
                 break;
         }
@@ -928,9 +928,9 @@ bool tickUnits(bool firstIteration) {
             botunit->hasDoneTick = false;
         }
         if (!botunit->hasDoneTick) {
-            time_t start = clock();
+            double start = millis();
             botunit->tick();
-            double dt = (clock()-start+0.0)/CLOCKS_PER_SEC;
+            double dt = millis() - start;
             timeUsed[botunit->unit.get_unit_type()] += dt;
             anyTickDone |= botunit->hasDoneTick;
         }
@@ -1005,10 +1005,10 @@ int main() {
 
     double totalTurnTime = 0.0;
     // loop through the whole game.
+    mapComputationTime = 0;
+    pathfindingTime = 0;
     while (true) {
-        time_t startPreprocessing = clock();
-        mapComputationTime = 0;
-        pathfindingTime = 0;
+        time_t t0 = millis();
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
 
@@ -1049,35 +1049,44 @@ int main() {
 
         updatePassableMap();
 
-        cout << "Preprocessing: " << (clock()-startPreprocessing+0.0)/CLOCKS_PER_SEC << endl;
+        auto t1 = millis();
+        cout << "Preprocessing: " << (t1-t0) << endl;
 
         bool firstIteration = true;
         while (true) {
-            time_t startIteration = clock();
+            auto t2 = millis();
             createUnits();
             bool anyTickDone = tickUnits(firstIteration);
-
-            cout << "Iteration: " << (clock()-startIteration+0.0)/CLOCKS_PER_SEC << endl;
+            auto t3 = millis();
+            cout << "Iteration: " << (t3 - t2) << endl;
 
             if (!anyTickDone) break;
 
             findUnits();
             firstIteration = false;
             executeMacroObjects();
+            auto t4 = millis();
+            cout << "Execute: " << (t4 - t3) << endl;
         }
 
+        auto t5 = millis();
+        cout << "All iterations: " << std::round(t5 - t1) << endl;
         updateResearch();
 
-        cout << "Map computation time: " << mapComputationTime << endl;
-        cout << "Pathfinding time: " << pathfindingTime << endl;
+        auto t6 = millis();
+        cout << "Research: " << (t6 - t5) << endl;
+
+        cout << "Map computation time: " << std::round(mapComputationTime) << endl;
+        cout << "Pathfinding time: " << std::round(pathfindingTime) << endl;
+        cout << "Invalidation time: " << std::round(unitInvalidationTime) << endl;
         for (auto it : timeUsed) {
-            cout << unitTypeToString[it.first] << ": " << it.second << endl;
+            cout << unitTypeToString[it.first] << ": " << std::round(it.second) << endl;
         }
 
-        double turnTime = (clock() - startPreprocessing + 0.0) / CLOCKS_PER_SEC;
-        cout << "Turn time: " << turnTime << endl; 
+        double turnTime = millis() - t0;
+        cout << "Turn time: " << turnTime << endl;
         totalTurnTime += turnTime;
-        cout << "Average: " << (totalTurnTime)/gc.get_round() << endl;
+        cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
 
         gc.write_team_array(0, state.totalUnitCount);
 

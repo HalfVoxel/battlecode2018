@@ -21,6 +21,7 @@ extern std::vector<bc::Unit> enemyUnits;
 extern std::vector<bc::Unit> allUnits;
 extern double pathfindingTime;
 extern double mapComputationTime;
+extern double unitInvalidationTime;
 extern std::map<unsigned int, BotUnit*> unitMap;
 
 extern bc::Team ourTeam;
@@ -34,3 +35,7 @@ extern int h;
 extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
 
 void invalidate_units();
+
+inline double millis() {
+    return 1000.0 * (double)clock() / (double)CLOCKS_PER_SEC;
+}
