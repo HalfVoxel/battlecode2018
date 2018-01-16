@@ -966,7 +966,7 @@ void createUnits() {
 
 map<UnitType, double> timeUsed;
 
-bool tickUnits(bool firstIteration) {
+bool tickUnits(bool firstIteration, int unitTypes = -1) {
     bool anyTickDone = false;
     for (int iteration = 0; iteration < 2; ++iteration) {
         for (const auto& unit : ourUnits) {
@@ -988,7 +988,7 @@ bool tickUnits(bool firstIteration) {
             if (firstIteration) {
                 botunit->hasDoneTick = false;
             }
-            if (!botunit->hasDoneTick) {
+            if (!botunit->hasDoneTick && (1 << (int)unit.get_unit_type()) & unitTypes) {
                 double start = millis();
                 botunit->tick();
                 double dt = millis() - start;
@@ -1170,7 +1170,10 @@ int main() {
         while (true) {
             auto t2 = millis();
             createUnits();
-            bool anyTickDone = tickUnits(firstIteration);
+            bool anyTickDone = tickUnits(firstIteration, 1 << (int)Healer);
+            firstIteration = false;
+
+            anyTickDone |= tickUnits(firstIteration);
             if (hasOvercharge) doOvercharge();
             auto t3 = millis();
             cout << "Iteration: " << (t3 - t2) << endl;
@@ -1178,10 +1181,9 @@ int main() {
             if (!anyTickDone) break;
 
             findUnits();
-            firstIteration = false;
             executeMacroObjects();
             auto t4 = millis();
-            cout << "Execute: " << (t4 - t3) << endl;
+            // cout << "Execute: " << (t4 - t3) << endl;
         }
 
         auto t5 = millis();
