@@ -478,9 +478,10 @@ struct BotHealer : BotUnit {
                 }
             }
             if (best_unit != nullptr) {
-                cout << "OVERCHARGE!!!!" << endl;
+                int otherUnitId = best_unit->get_id();
                 gc.overcharge(unit.get_id(), best_unit->get_id());
                 invalidate_units();
+                unitMap[otherUnitId]->tick();
             }
         }
     }
