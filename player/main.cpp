@@ -26,6 +26,13 @@ bool hasOvercharge;
 double bestMacroObjectScore;
 bool existsPathToEnemy;
 
+// Sort of how many distinct ways there are to get to the enemy
+// If the enemy is behind a wall, then this is 0
+// If there is a choke point of size 1 then this is 1.
+// If the player starts in 2 places, each of them can reach the enemy in 1 way, then this is 2.
+// All paths to the enemy must thouch distinct nodes.
+int mapConnectedness;
+
 // On average how many units there are around an enemy unit that we can see
 // This is the expected damage multiplier for mages
 float splashDamagePotential = 0;
@@ -1140,23 +1147,41 @@ void updateResearchStatus() {
     }
 }
 
-bool computeExistsPathToEnemy() {
+int computeConnectedness() {
+    PathfindingMap targetMap(w, h);
+
+    int connectedness = 0;
     Pathfinder pathfinder;
-    auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
+    auto& initial_units = gc.get_starting_planet(Earth).get_initial_units();
     for (auto& enemy : initial_units) {
         if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
-            auto pos = enemy.get_location().get_map_location();
-            for (auto& unit : initial_units) {
-                if (unit.get_team() != enemyTeam && unit.get_location().is_on_map()) {
-                    auto pos2 = unit.get_location().get_map_location();
-                    if (pathfinder.existsPathToLocation(pos2, pos, passableMap)) {
-                        return true;
+            targetMap.addInfluence(1000, enemy.get_map_location());
+        }
+    }
+
+    PathfindingMap passableMap2 = passableMap;
+
+    bool changed = true;
+    while(connectedness < 5 && changed) {
+        changed = false;
+        for (auto& unit : initial_units) {
+            if (unit.get_team() != enemyTeam && unit.get_location().is_on_map()) {
+                auto pos = unit.get_location().get_map_location();
+                auto path = pathfinder.getPath(pos, targetMap, passableMap2);
+                cout << "Found path of length " << path.size() << endl;
+                if (path.size() > 1) {
+                    changed = true;
+                    connectedness++;
+                    for (int i = 1; i < path.size() - 1; i++) {
+                        passableMap2.addInfluence(numeric_limits<double>::infinity(), MapLocation(pos.get_planet(), path[i].x, path[i].y));
                     }
                 }
             }
         }
     }
-    return false;
+
+    cout << "Map is " << connectedness << " connected" << endl;
+    return connectedness;
 }
 
 #ifdef CUSTOM_BACKTRACE
@@ -1204,13 +1229,22 @@ int main() {
     }
 
     updatePassableMap();
-    existsPathToEnemy = computeExistsPathToEnemy();
-    if (!existsPathToEnemy) {
-        cout << "There doesn't exist a path to the enemy!" << endl;
+    if (planet == Earth) {
+        mapConnectedness = computeConnectedness();
+        existsPathToEnemy = mapConnectedness > 0;
+        if (!existsPathToEnemy) {
+            cout << "There doesn't exist a path to the enemy!" << endl;
+        }
+        else {
+            cout << "There exists a path to the enemy!" << endl;
+        }
+    } else {
+        // Mars
+        // Whatever
+        mapConnectedness = 10;
+        existsPathToEnemy = true;
     }
-    else {
-        cout << "There exists a path to the enemy!" << endl;
-    }
+    
 
     enemyPositionMap = PathfindingMap(w, h);
 
