@@ -10,3 +10,5 @@ struct BotRocket : BotUnit {
 
     void tick();
 };
+
+tuple<bool,MapLocation,int> find_best_landing_spot();

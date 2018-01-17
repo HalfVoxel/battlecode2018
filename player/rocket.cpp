@@ -1,5 +1,5 @@
 #include "rocket.h"
-
+#include "pathfinding.hpp"
 using namespace bc;
 using namespace std;
 
@@ -31,7 +31,10 @@ vector<vector<double>> mars_karbonite_map(int time) {
     return res;
 }
 
-pair<bool,MapLocation> find_best_landing_spot() {
+map<int, int> visitedMarsRegions;
+PathfindingMap dontLandSpots(MAX_MAP_SIZE,MAX_MAP_SIZE);
+
+tuple<bool,MapLocation,int> find_best_landing_spot() {
     cout << "Finding landing spot" << endl;
     auto& marsMap = gc.get_starting_planet(Mars);
     
@@ -41,13 +44,19 @@ pair<bool,MapLocation> find_best_landing_spot() {
     vector<vector<bool>> searched (w, vector<bool>(h, false));
 
     float bestScore = -1;
+    int bestRegion = 0;
     MapLocation bestLandingSpot = MapLocation(Earth, 0, 0);
 
+    int region = 0;
     for (int x = 0; x < w; x++) {
-        for (int y = 0; y < w; y++) {
-            if (searched[x][y]) break;
+        for (int y = 0; y < h; y++) {
+            if (searched[x][y]) continue;
 
             if (marsMap.is_passable_terrain_at(MapLocation(Mars, x, y))) {
+                // Note: assumes that regions never change!!
+                // Otherwise the region IDs will get messed up
+                region++;
+
                 stack<pii> que;
                 que.push(pii(x,y));
                 searched[x][y] = true;
@@ -64,7 +73,7 @@ pair<bool,MapLocation> find_best_landing_spot() {
                     totalResources += karb[p.first][p.second];
                     totalArea += 1;
 
-                    float nodeScore = -karb[p.first][p.second];
+                    float nodeScore = -karb[p.first][p.second] + dontLandSpots.weights[p.first][p.second];
                     if (nodeScore > inRegionScore) {
                         inRegionScore = nodeScore;
                         bestInRegion = p;
@@ -91,11 +100,12 @@ pair<bool,MapLocation> find_best_landing_spot() {
                     }
                 }
 
-                cerr << "Area: " << totalArea << " Resources: " << totalResources << " best spot " << bestInRegion.first << " " << bestInRegion.second << " with score " << inRegionScore << endl;
-
-                float score = totalResources + totalArea * 0.001f;
+                int timesVisitedPreviously = visitedMarsRegions[region];
+                float score = (totalResources + totalArea * 0.1f) / ((dontLandSpots.weights[bestInRegion.first][bestInRegion.second] + 1) * (1 + timesVisitedPreviously));
+                cerr << "Area: " << totalArea << " Resources: " << totalResources << " best spot " << bestInRegion.first << " " << bestInRegion.second << " with score " << inRegionScore <<  " => " << score << endl;
                 if (score > bestScore) {
                     bestScore = score;
+                    bestRegion = region;
                     bestLandingSpot = MapLocation(Mars, bestInRegion.first, bestInRegion.second);
                 }
             }
@@ -103,7 +113,7 @@ pair<bool,MapLocation> find_best_landing_spot() {
     }
     
     cout << "Found " << bestLandingSpot.get_x() << " " << bestLandingSpot.get_y() << endl;
-    return make_pair(bestScore > 0, bestLandingSpot);
+    return make_tuple(bestScore > 0, bestLandingSpot, bestRegion);
 }
 
 void BotRocket::tick() {
@@ -129,16 +139,23 @@ void BotRocket::tick() {
             }
         }
         if (unit.get_structure_garrison().size() == unit.get_structure_max_capacity() || gc.get_round() == 749 || (workerCount && !launchedWorkerCount)) {
-            auto res = find_best_landing_spot();
-            if (res.first) {
-                if (gc.can_launch_rocket(unit.get_id(), res.second)) {
-                    gc.launch_rocket(unit.get_id(), res.second);
+            bool anyLandingSpot;
+            MapLocation landingSpot;
+            int marsRegion;
+            tie(anyLandingSpot, landingSpot, marsRegion) = find_best_landing_spot();
+            if (anyLandingSpot) {
+                if (gc.can_launch_rocket(unit.get_id(), landingSpot)) {
+                    visitedMarsRegions[marsRegion]++;
+                    // Heavily discourage ladning in the same 3x3 region as this rocket.
+                    double reductionFactor = 10;
+                    dontLandSpots.addInfluence(vector<vector<double>>(3, vector<double>(3, reductionFactor)), landingSpot.get_x(), landingSpot.get_y());
+                    gc.launch_rocket(unit.get_id(), landingSpot);
                     invalidate_units();
                     launchedWorkerCount += workerCount;
                     if (countRocketsSent < 20) {
                         gc.write_team_array(1, ++countRocketsSent);
-                        gc.write_team_array(2 * countRocketsSent, res.second.get_x());
-                        gc.write_team_array(2 * countRocketsSent, res.second.get_y());
+                        gc.write_team_array(2 * countRocketsSent, landingSpot.get_x());
+                        gc.write_team_array(2 * countRocketsSent, landingSpot.get_y());
                     }
                 }
             }
