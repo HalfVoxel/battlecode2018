@@ -26,6 +26,9 @@ bool hasOvercharge;
 double bestMacroObjectScore;
 bool existsPathToEnemy;
 
+// True if mars has any landing spots (i.e does mars have any traversable ground)
+bool anyReasonableLandingSpotOnInitialMars;
+
 // Sort of how many distinct ways there are to get to the enemy
 // If the enemy is behind a wall, then this is 0
 // If there is a choke point of size 1 then this is 1.
@@ -687,6 +690,12 @@ struct Researcher {
         }
         switch(researchInfo.get_level(Rocket)) {
             case 0:
+                if (!anyReasonableLandingSpotOnInitialMars) {
+                    // Ha! We cannot even LAND on mars, why should we get there?
+                    scores[Rocket] = 0;
+                    break;
+                }
+
                 scores[Rocket] = 7;
                 if (state.typeCount[Ranger] > 100) {
                     scores[Rocket] += 100;
@@ -1255,6 +1264,7 @@ int main() {
         existsPathToEnemy = true;
     }
     
+    anyReasonableLandingSpotOnInitialMars = get<0>(find_best_landing_spot());
 
     enemyPositionMap = PathfindingMap(w, h);
 
