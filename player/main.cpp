@@ -1139,7 +1139,15 @@ bool computeExistsPathToEnemy() {
     return false;
 }
 
+#ifdef CUSTOM_BACKTRACE
+void* __libc_stack_end;
+#endif
+
 int main() {
+#ifdef CUSTOM_BACKTRACE
+    __libc_stack_end = __builtin_frame_address(0);
+    setup_signal_handlers();
+#endif
     srand(time(0));
 
     printf("Player C++ bot starting\n");

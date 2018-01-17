@@ -15,8 +15,12 @@ else
     exit 1
 fi
 
-g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
-# g++ -std=c++11 -O2 -rdynamic everything.cpp -DNDEBUG -o main $LIBRARIES $INCLUDES
+BC_DEPLOY=0
+if [ "$BC_DEPLOY" = '1' ]; then
+	g++ -std=c++11 -O2 -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
+else
+	g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+fi
 
 # run the program!
-time ./main
+./main
