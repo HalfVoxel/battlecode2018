@@ -286,11 +286,13 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
             }
         }
 
-        auto&& initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
-        for (auto& enemy : initial_units) {
-            if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
-                auto pos = enemy.get_location().get_map_location();
-                targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], 0.01);
+        if (planet == Earth) {
+            auto&& initial_units = gc.get_starting_planet((Planet)0).get_initial_units();
+            for (auto& enemy : initial_units) {
+                if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
+                    auto pos = enemy.get_location().get_map_location();
+                    targetMap.weights[pos.get_x()][pos.get_y()] = max(targetMap.weights[pos.get_x()][pos.get_y()], 0.01);
+                }
             }
         }
 
@@ -338,7 +340,7 @@ PathfindingMap BotUnit::defaultMilitaryCostMap () {
         return reusableMaps[reuseObject];
     }
     else {
-        auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1;
+        auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 1000.0;
         reusableMaps[reuseObject] = costMap;
         return costMap;
     }

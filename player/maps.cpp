@@ -13,5 +13,6 @@ PathfindingMap passableMap;
 PathfindingMap enemyNearbyMap;
 PathfindingMap enemyPositionMap;
 PathfindingMap nearbyFriendMap;
+PathfindingMap rocketHazardMap;
 
 map<MapReuseObject, PathfindingMap> reusableMaps;

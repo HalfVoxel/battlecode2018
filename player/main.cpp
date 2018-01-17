@@ -125,7 +125,7 @@ struct BotWorker : BotUnit {
             return reusableMaps[reuseObject];
         }
         else {
-            auto costMap = ((passableMap * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap + structureProximityMap;
+            auto costMap = ((passableMap * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap + structureProximityMap + rocketHazardMap * 1000.0;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
@@ -146,6 +146,12 @@ struct BotWorker : BotUnit {
             unitMapLocation = getNextLocation();
             moveToLocation(unitMapLocation);
         }
+        
+        if (!unit.get_location().is_on_map()) {
+            return;
+        }
+        
+        unitMapLocation = unit.get_location().get_map_location();
 
         const auto nearby = gc.sense_nearby_units(unitMapLocation, 2);
 
@@ -394,7 +400,7 @@ struct BotHealer : BotUnit {
                 }
             }
 
-            auto costMap = passableMap + healerProximityMap + enemyInfluenceMap;
+            auto costMap = passableMap + healerProximityMap + enemyInfluenceMap + rocketHazardMap * 1000.0;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
@@ -600,7 +606,10 @@ void selectTravellersForRocket(Unit& unit) {
         if (u.get_unit_type() == Rocket || u.get_unit_type() == Factory) {
             continue;
         }
-        if (u.get_unit_type() == Worker && state.typeCount[Worker] <= 3) {
+        if (u.get_unit_type() != Worker && candidates.size() == unit.get_structure_max_capacity() - 1 && !launchedWorkerCount) {
+            continue;
+        }
+        if (u.get_unit_type() == Worker && state.typeCount[Worker] <= 1) {
             continue;
         }
         if (u.get_location().is_on_map()) {
@@ -985,6 +994,17 @@ void updatePassableMap() {
     }
 }
 
+void updateRocketHazardMap() {
+    rocketHazardMap = PathfindingMap(w, h);
+    const auto& teamArray = gc.get_team_array(Earth);
+    int rocketCount = teamArray[1];
+    for (int i = 0; i < rocketCount; i++) {
+        int x = teamArray[2*i+2];
+        int y = teamArray[2*i+3];
+        rocketHazardMap.weights[x][y] = 1;
+    }
+}
+
 void analyzeEnemyPositions () {
     splashDamagePotential = 0;
     float weight = 0;
@@ -1171,6 +1191,9 @@ int main() {
     h = planetMap->get_height();
     initKarboniteMap();
     initInfluence();
+    if (planet == Earth) {
+        rocketHazardMap = PathfindingMap(w, h);
+    }
 
     updatePassableMap();
     existsPathToEnemy = computeExistsPathToEnemy();
@@ -1206,6 +1229,11 @@ int main() {
         updateWorkerMaps();
         updateStructureProximityMap();
         updateDamagedStructuresMap();
+        
+        if (planet == Mars) {
+            updateRocketHazardMap();
+        }
+
         analyzeEnemyPositions();
 
         unitShouldGoToRocket.clear();

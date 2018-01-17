@@ -4,6 +4,7 @@ using namespace bc;
 using namespace std;
 
 int launchedWorkerCount;
+int countRocketsSent = 0;
 
 vector<vector<double>> mars_karbonite_map(int time) {
     auto& marsMap = gc.get_starting_planet(Mars);
@@ -134,6 +135,11 @@ void BotRocket::tick() {
                     gc.launch_rocket(unit.get_id(), res.second);
                     invalidate_units();
                     launchedWorkerCount += workerCount;
+                    if (countRocketsSent < 20) {
+                        gc.write_team_array(1, ++countRocketsSent);
+                        gc.write_team_array(2 * countRocketsSent, res.second.get_x());
+                        gc.write_team_array(2 * countRocketsSent, res.second.get_y());
+                    }
                 }
             }
         }
