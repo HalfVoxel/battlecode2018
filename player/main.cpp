@@ -245,8 +245,13 @@ struct BotWorker : BotUnit {
                         if (!launchedWorkerCount && !state.typeCount[Rocket]) {
                             factor += 0.5;
                         }
-                        if (!existsPathToEnemy) {
+                        // No path to enemy
+                        if (mapConnectedness == 0) {
                             factor += 0.2;
+                        }
+                        // 1 or 2 paths to the enemy, will be hard to invade
+                        if (mapConnectedness <= 2) {
+                            factor += 0.1;
                         }
                         if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 10 && averageAttackerSuccessRate < 0.05)) {
                             factor += 0.1;
@@ -691,6 +696,10 @@ struct Researcher {
                 }
                 if (!existsPathToEnemy) {
                     scores[Rocket] += 1000;
+                }
+                // Few paths to the enemy. Will be hard to invade on earth
+                if (mapConnectedness <= 2) {
+                    scores[Rocket] += 10;
                 }
                 cout << "ROCKET SCORE:" << scores[Rocket] << endl;
                 break;
