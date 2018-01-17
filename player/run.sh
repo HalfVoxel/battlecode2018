@@ -16,10 +16,16 @@ else
 fi
 
 BC_DEPLOY=0
-if [ "$BC_DEPLOY" = '1' ]; then
-	g++ -std=c++11 -O2 -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
+if [ "$BC_DEPLOY" = '2' ]; then
+    # We run out of memory with g++. Instead we ship a pre-compiled binary.
+    echo running chmod
+    chmod +x main
+elif [ "$BC_DEPLOY" = '1' ]; then
+    echo g++ -std=c++11 -O2 -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
+    g++ -std=c++11 -O2 -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
 else
-	g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+    echo g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+    g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
 fi
 
 # run the program!
