@@ -26,6 +26,9 @@ bool hasOvercharge;
 double bestMacroObjectScore;
 bool existsPathToEnemy;
 
+// On average how many units there are around an enemy unit that we can see
+// This is the expected damage multiplier for mages
+float splashDamagePotential = 0;
 
 
 static_assert((int)Worker == 0, "");
@@ -540,7 +543,8 @@ struct BotFactory : BotUnit {
         }
         if (gc.can_produce_robot(id, Mage)){
             auto location = unit.get_location().get_map_location();
-            double score = enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
+            // Not even sure about this, but yeah. If a mage hit will on average hit 4 enemies, go for it (compare to ranger score of 2)
+            double score = splashDamagePotential * 0.5; // enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Mage), 2, [=] {
                 if (gc.can_produce_robot(id, Mage)) {
                     gc.produce_robot(id, Mage);
@@ -985,6 +989,22 @@ void updatePassableMap() {
     }
 }
 
+void analyzeEnemyPositions () {
+    splashDamagePotential = 0;
+    float weight = 0;
+    for (const auto& unit : enemyUnits) {
+        auto nearby = gc.sense_nearby_units_by_team(unit.get_map_location(), 2, enemyTeam);
+        splashDamagePotential += nearby.size();
+        weight += 1;
+    }
+    if (weight > 0) splashDamagePotential /= weight;
+
+    // Assume at least a multiplier of 2.
+    // Important in the beginning of the game when we cannot see any enemies
+    splashDamagePotential = max(splashDamagePotential, 2.0f);
+    cerr << "Splash damage potential: " << splashDamagePotential << endl;
+
+}
 void createUnits() {
     for (const auto& unit : ourUnits) {
         assert(gc.has_unit(unit.get_id()));
@@ -1190,7 +1210,7 @@ int main() {
         updateWorkerMaps();
         updateStructureProximityMap();
         updateDamagedStructuresMap();
-
+        analyzeEnemyPositions();
 
         unitShouldGoToRocket.clear();
 
