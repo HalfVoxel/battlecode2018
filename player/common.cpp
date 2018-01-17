@@ -24,6 +24,7 @@ int h;
 map<unsigned, vector<unsigned> > unitShouldGoToRocket;
 
 void invalidate_unit(unsigned int id) {
+	auto t0 = millis();
     if (gc.has_unit(id)) {
         unitMap[id]->unit = gc.get_unit(id);
     } else {
@@ -31,13 +32,12 @@ void invalidate_unit(unsigned int id) {
         // Unit has suddenly disappeared, oh noes!
         // Maybe it went into space or something
     }
+    unitInvalidationTime += millis() - t0;
 }
 
 /** Call if our units may have been changed in some way, e.g damaged by Mage splash damage and killed */
 void invalidate_units() {
-	auto t0 = millis();
     for (auto& unit : ourUnits) {
         invalidate_unit(unit.get_id());
     }
-    unitInvalidationTime += millis() - t0;
 }

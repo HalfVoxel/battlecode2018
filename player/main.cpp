@@ -192,6 +192,9 @@ struct BotWorker : BotUnit {
 
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
         double replicateScore = karbonitePerWorker * 0.008 + 2.5 / state.typeCount[Worker];
+        if (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth) {
+            replicateScore = -1;
+        }
 
         if (planet == Earth) {
             for (int i = 0; i < 8; i++) {
@@ -202,8 +205,11 @@ struct BotWorker : BotUnit {
                     int x = newLocation.get_x();
                     int y = newLocation.get_y();
                     double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
+                    if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 400 > state.remainingKarboniteOnEarth)
+                        score = 0;
                     score -= karboniteMap.weights[x][y] * 0.001;
                     score -= structureProximityMap.weights[x][y] * 0.001;
+                    score -= enemyNearbyMap.weights[x][y] * 0.001;
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
                         if(gc.can_blueprint(id, Factory, d)){
                             gc.blueprint(id, Factory, d);
@@ -864,13 +870,32 @@ void updateEnemyInfluenceMaps(){
     }
 }
 
-void updateWorkerProximityMap() {
+void updateWorkerMaps() {
     workerProximityMap = PathfindingMap(w, h);
     for (auto& u : ourUnits) {
         if (u.get_location().is_on_map()) {
             if (u.get_unit_type() == Worker) {
                 auto pos = u.get_location().get_map_location();
                 workerProximityMap.maxInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
+            }
+        }
+    }
+    workersNextToMap = PathfindingMap(w, h);
+    for (auto& u : ourUnits) {
+        if (u.get_location().is_on_map()) {
+            if (u.get_unit_type() == Worker) {
+                auto pos = u.get_location().get_map_location();
+                int x = pos.get_x();
+                int y = pos.get_y();
+                for (int dx = -1; dx <= 1; ++dx) {
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
+                            workersNextToMap.weights[nx][ny]++;
+                        }
+                    }
+                }
             }
         }
     }
@@ -900,9 +925,12 @@ void updateDamagedStructuresMap() {
             if (remainingLife == 1.0) {
                 continue;
             }
+            auto unitLocation = unit.get_location().get_map_location();
+            int unitX = unitLocation.get_x();
+            int unitY = unitLocation.get_y();
             for (int i = 0; i < 8; i++) {
                 Direction d = (Direction) i;
-                auto location = unit.get_location().get_map_location().add(d);
+                auto location = unitLocation.add(d);
                 int x = location.get_x();
                 int y = location.get_y();
                 if (x >= 0 && x < w && y >= 0 && y < h) {
@@ -913,6 +941,10 @@ void updateDamagedStructuresMap() {
                         damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 2 * (2.0 - remainingLife));
                     }
                     else {
+                        double score = 3 * (1.5 + remainingLife);
+                        if (workersNextToMap.weights[unitX][unitY] >= 5) {
+                            score /= 1 + 0.05 + workersNextToMap.weights[unitX][unitY];
+                        }
                         damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 3 * (1.5 + remainingLife));
                     }
                 }
@@ -1155,7 +1187,7 @@ int main() {
         // NOTE: this call also updates enemy position map for some reason
         updateKarboniteMap();
         updateEnemyInfluenceMaps();
-        updateWorkerProximityMap();
+        updateWorkerMaps();
         updateStructureProximityMap();
         updateDamagedStructuresMap();
 
