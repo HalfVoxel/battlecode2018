@@ -3,6 +3,8 @@
 #include "common.h"
 #include "pathfinding.hpp"
 
+double averageAttackerSuccessRate;
+
 struct BotUnit {
     bc::Unit unit;
     const unsigned id;

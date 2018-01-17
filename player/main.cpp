@@ -122,7 +122,7 @@ struct BotWorker : BotUnit {
             return reusableMaps[reuseObject];
         }
         else {
-            auto costMap = ((passableMap * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap;
+            auto costMap = ((passableMap * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap + structureProximityMap;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
@@ -203,7 +203,7 @@ struct BotWorker : BotUnit {
                     int y = newLocation.get_y();
                     double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
                     score -= karboniteMap.weights[x][y] * 0.001;
-                    score -= workerProximityMap.weights[x][y] * 0.001;
+                    score -= structureProximityMap.weights[x][y] * 0.001;
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
                         if(gc.can_blueprint(id, Factory, d)){
                             gc.blueprint(id, Factory, d);
@@ -221,9 +221,12 @@ struct BotWorker : BotUnit {
                         if (!existsPathToEnemy) {
                             factor += 0.2;
                         }
+                        if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 10 && averageAttackerSuccessRate < 0.05)) {
+                            factor += 0.1;
+                        }
                         double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
                         score -= karboniteMap.weights[x][y] * 0.001;
-                        score -= workerProximityMap.weights[x][y] * 0.001;
+                        score -= structureProximityMap.weights[x][y] * 0.001;
                         macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
                             if(gc.can_blueprint(id, Rocket, d)){
                                 gc.blueprint(id, Rocket, d);
@@ -424,7 +427,8 @@ struct BotHealer : BotUnit {
         }
         if (bestTargetId != -1) {
             gc.heal(id, bestTargetId);
-            invalidate_units();
+            invalidate_unit(bestTargetId);
+            invalidate_unit(id);
             succeededHealing = true;
         }
 
@@ -455,11 +459,12 @@ struct BotHealer : BotUnit {
             }
             if (bestTargetId != -1) {
                 gc.heal(id, bestTargetId);
-                invalidate_units();
+                invalidate_unit(bestTargetId);
+                invalidate_unit(id);
                 succeededHealing = true;
             }
         }
-        double interpolationFactor = 0.99;
+        double interpolationFactor = 0.999;
         averageHealerSuccessRate = averageHealerSuccessRate * interpolationFactor + succeededHealing * (1-interpolationFactor);
     }
 
@@ -484,7 +489,8 @@ struct BotHealer : BotUnit {
             if (best_unit != nullptr) {
                 int otherUnitId = best_unit->get_id();
                 gc.overcharge(unit.get_id(), best_unit->get_id());
-                invalidate_units();
+                invalidate_unit(best_unit->get_id());
+                invalidate_unit(id);
                 unitMap[otherUnitId]->tick();
             }
         }
@@ -617,13 +623,13 @@ struct Researcher {
         auto researchInfo = gc.get_research_info();
         switch(researchInfo.get_level(Ranger)) {
             case 0:
-                scores[Ranger] = 10 + 0.1 * state.typeCount[Ranger];
+                scores[Ranger] = 30 + 0.1 * state.typeCount[Ranger];
                 break;
             case 1:
-                scores[Ranger] = 5 + 0.1 * state.typeCount[Ranger];
+                scores[Ranger] = 5 + 0.01 * state.typeCount[Ranger];
                 break;
             case 2:
-                scores[Ranger] = 3 + 0.1 * state.typeCount[Ranger];
+                scores[Ranger] = 3 + 0.01 * state.typeCount[Ranger];
                 break;
         }
         switch(researchInfo.get_level(Healer)) {
@@ -634,29 +640,36 @@ struct Researcher {
                 scores[Healer] = 6 + 1.0 * state.typeCount[Healer];
                 break;
             case 2: 
-                scores[Healer] = 1.0 * state.typeCount[Healer];
+                scores[Healer] = 6 + 1.0 * state.typeCount[Healer];
                 break;
         }
         switch(researchInfo.get_level(Worker)) {
             case 0:
-                scores[Worker] = 5;
+                scores[Worker] = 2;
                 break;
             case 1:
-                scores[Worker] = 3;
+                scores[Worker] = 1;
                 break;
             case 2:
-                scores[Worker] = 3;
+                scores[Worker] = 1;
                 break;
             case 3:
-                scores[Worker] = 6;
+                scores[Worker] = 1;
                 break;
         }
         switch(researchInfo.get_level(Rocket)) {
             case 0:
                 scores[Rocket] = 7;
-                if (!existsPathToEnemy) {
-                    scores[Rocket] = 1000;
+                if (state.typeCount[Ranger] > 100) {
+                    scores[Rocket] += 100;
                 }
+                if (gc.get_round() > 55 && averageAttackerSuccessRate < 0.03) {
+                    scores[Rocket] += 20;
+                }
+                if (!existsPathToEnemy) {
+                    scores[Rocket] += 1000;
+                }
+                cout << "ROCKET SCORE:" << scores[Rocket] << endl;
                 break;
             case 1:
                 scores[Rocket] = 6;
@@ -859,13 +872,21 @@ void updateWorkerProximityMap() {
                 auto pos = u.get_location().get_map_location();
                 workerProximityMap.maxInfluence(workerProximityInfluence, pos.get_x(), pos.get_y());
             }
+        }
+    }
+}
+
+void updateStructureProximityMap() {
+    structureProximityMap = PathfindingMap(w, h);
+    for (auto& u : ourUnits) {
+        if (u.get_location().is_on_map()) {
             if (u.get_unit_type() == Factory && u.structure_is_built()) {
                 auto pos = u.get_location().get_map_location();
-                workerProximityMap.maxInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
+                structureProximityMap.maxInfluence(factoryProximityInfluence, pos.get_x(), pos.get_y());
             }
             if (u.get_unit_type() == Rocket && u.structure_is_built()) {
                 auto pos = u.get_location().get_map_location();
-                workerProximityMap.maxInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
+                structureProximityMap.maxInfluence(rocketProximityInfluence, pos.get_x(), pos.get_y());
             }
         }
     }
@@ -1135,6 +1156,7 @@ int main() {
         updateKarboniteMap();
         updateEnemyInfluenceMaps();
         updateWorkerProximityMap();
+        updateStructureProximityMap();
         updateDamagedStructuresMap();
 
 
@@ -1202,6 +1224,7 @@ int main() {
         cout << "Turn time: " << turnTime << endl;
         totalTurnTime += turnTime;
         cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
+        cout << "Attacker success rate: " << averageAttackerSuccessRate << endl;
 
         gc.write_team_array(0, state.totalUnitCount);
 

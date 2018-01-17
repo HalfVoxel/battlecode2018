@@ -8,23 +8,34 @@ using namespace std;
 // Relative values of different unit types when at "low" (not full) health
 float unit_defensive_strategic_value[] = {
     1, // Worker
-    4, // Knight
-    5, // Ranger
-    4, // Mage
-    2, // Healer
-    2, // Factory
-    1, // Rocket
+    2, // Knight
+    3, // Ranger
+    6, // Mage
+    5, // Healer
+    4, // Factory
+    4, // Rocket
 };
 
 // Relative values of different unit types when at full or almost full health
 float unit_strategic_value[] = {
-    2, // Worker
-    1, // Knight
+    1, // Worker
+    2, // Knight
     3, // Ranger
-    3, // Mage
-    2, // Healer
-    2, // Factory
-    2, // Rocket
+    6, // Mage
+    5, // Healer
+    4, // Factory
+    4, // Rocket
+};
+
+// Relative values of different unit types when at Mars
+float unit_martian_strategic_value[] = {
+    2, // Worker
+    3, // Knight
+    4, // Ranger
+    6, // Mage
+    5, // Healer
+    1, // Factory
+    1, // Rocket
 };
 
 void BotUnit::tick() {}
@@ -112,7 +123,7 @@ void BotUnit::moveToLocation(MapLocation nextLocation) {
             if (gc.can_move(id, d)) {
                 passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                 gc.move_robot(id,d);
-                invalidate_units();
+                invalidate_unit(id);
                 unitMapLocation = unit.get_location().get_map_location();
                 passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
             }
@@ -122,7 +133,8 @@ void BotUnit::moveToLocation(MapLocation nextLocation) {
                     if (gc.can_load(u.get_id(), unit.get_id())) {
                         passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                         gc.load(u.get_id(), unit.get_id());
-                        invalidate_units();
+                        invalidate_unit(u.get_id());
+                        invalidate_unit(unit.get_id());
                     }
                 }
             }
@@ -136,7 +148,8 @@ bool BotUnit::unloadFrontUnit() {
     Direction dir = unit.get_location().get_map_location().direction_to(nextLocation);
     if (gc.can_unload(id, dir)){
         gc.unload(id, dir);
-        invalidate_units();
+        invalidate_unit(u->unit.get_id());
+        invalidate_unit(id);
         return true;
     }
     return false;
@@ -155,7 +168,7 @@ void mage_attack(const Unit& unit) {
     double best_unit_score = 0;
 
     auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
-    auto& values = low_health ? unit_defensive_strategic_value : unit_strategic_value;
+    auto& values = planet == Mars ? unit_martian_strategic_value : (low_health ? unit_defensive_strategic_value : unit_strategic_value);
 
     auto hitScore = vector<vector<double>>(w, vector<double>(h));
 
@@ -191,15 +204,20 @@ void mage_attack(const Unit& unit) {
         }
     }
 
+    int attackSuccessful = 0;
     if (best_unit != nullptr) {
+        attackSuccessful = 1;
         //Attacking 'em enemies
         gc.attack(unit.get_id(), best_unit->get_id());
         invalidate_units();
     }
+    double interpolationFactor = 0.999;
+    averageAttackerSuccessRate = averageAttackerSuccessRate * interpolationFactor + attackSuccessful * (1-interpolationFactor);
 }
 
 void attack_all_in_range(const Unit& unit) {
-    if (!gc.is_attack_ready(unit.get_id())) return;
+    int id = unit.get_id();
+    if (!gc.is_attack_ready(id)) return;
 
     if (!unit.get_location().is_on_map()) return;
 
@@ -215,7 +233,7 @@ void attack_all_in_range(const Unit& unit) {
 
     for (auto& place : nearby) {
         if (place.get_health() <= 0) continue;
-        if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
+        if (!gc.can_attack(id, place.get_id())) continue;
         if (place.get_team() == unit.get_team()) continue;
 
         float fractional_health = place.get_health() / (float)place.get_max_health();
@@ -229,11 +247,17 @@ void attack_all_in_range(const Unit& unit) {
         }
     }
 
+    int attackSuccessful = 0;
     if (best_unit != nullptr) {
+        attackSuccessful = 1;
         //Attacking 'em enemies
-        gc.attack(unit.get_id(), best_unit->get_id());
-        invalidate_units();
+        gc.attack(id, best_unit->get_id());
+        invalidate_unit(id);
     }
+
+    double interpolationFactor = 0.999;
+    averageAttackerSuccessRate = averageAttackerSuccessRate * interpolationFactor + attackSuccessful * (1-interpolationFactor);
+
 }
 
 PathfindingMap BotUnit::defaultMilitaryTargetMap() {
