@@ -31,6 +31,7 @@ bool existsPathToEnemy;
 // If there is a choke point of size 1 then this is 1.
 // If the player starts in 2 places, each of them can reach the enemy in 1 way, then this is 2.
 // All paths to the enemy must thouch distinct nodes.
+// Maximum value is 6 to avoid wasting too much time calculating it.
 int mapConnectedness;
 
 // On average how many units there are around an enemy unit that we can see
