@@ -332,7 +332,16 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
 }
 
 PathfindingMap BotUnit::defaultMilitaryCostMap () {
-    return (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0);
+    MapReuseObject reuseObject(MapType::Cost, unit.get_unit_type(), false);
+
+    if (reusableMaps.count(reuseObject)) {
+        return reusableMaps[reuseObject];
+    }
+    else {
+        auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1;
+        reusableMaps[reuseObject] = costMap;
+        return costMap;
+    }
 }
 
 double attackingTime;

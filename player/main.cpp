@@ -94,7 +94,7 @@ struct BotWorker : BotUnit {
             targetMap = reusableMaps[reuseObject];
         }
         else {
-            targetMap = fuzzyKarboniteMap + damagedStructureMap - enemyNearbyMap * 1.0 + 0.01;
+            targetMap = fuzzyKarboniteMap + damagedStructureMap - enemyNearbyMap * 1.0 + 0.01 - structureProximityMap * 0.01;
             if (unit.get_health() < unit.get_max_health()) {
                 for (auto& u : ourUnits) {
                     if (u.get_unit_type() == Healer) {
@@ -139,11 +139,15 @@ struct BotWorker : BotUnit {
         }
 
         hasDoneTick = true;
-
-        const auto locus = unit.get_location().get_map_location();
-        const auto nearby = gc.sense_nearby_units(locus, 2);
-
+        
         auto unitMapLocation = unit.get_location().get_map_location();
+
+        if (gc.is_move_ready(unit.get_id())) {
+            unitMapLocation = getNextLocation();
+            moveToLocation(unitMapLocation);
+        }
+
+        const auto nearby = gc.sense_nearby_units(unitMapLocation, 2);
 
         const unsigned id = unit.get_id();
 
@@ -246,16 +250,8 @@ struct BotWorker : BotUnit {
             }
         }
 
-        auto nextLocation = unitMapLocation;
-
-        if (gc.is_move_ready(unit.get_id())) {
-            auto nextLocation = getNextLocation();
-            moveToLocation(nextLocation);
-        }
-
         if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0 || state.typeCount[Worker] < 8) && replicateScore > bestMacroObjectScore - 0.1) {
-            unitMapLocation = nextLocation;
-            nextLocation = getNextLocation(unitMapLocation, false);
+            auto nextLocation = getNextLocation(unitMapLocation, false);
 
             if (nextLocation != unitMapLocation) {
                 auto d = unitMapLocation.direction_to(nextLocation);
@@ -342,7 +338,7 @@ struct BotHealer : BotUnit {
             targetMap = reusableMaps[reuseObject];
         }
         else {
-            targetMap = enemyNearbyMap * 0.0001;
+            targetMap = enemyNearbyMap * 0.0001 + 0.001 - structureProximityMap * 0.001;
             for (auto& u : ourUnits) {
                 if (!u.get_location().is_on_map()) {
                     continue;
@@ -473,7 +469,7 @@ struct BotHealer : BotUnit {
                 succeededHealing = true;
             }
         }
-        double interpolationFactor = 0.999;
+        double interpolationFactor = 0.99;
         averageHealerSuccessRate = averageHealerSuccessRate * interpolationFactor + succeededHealing * (1-interpolationFactor);
     }
 
@@ -541,7 +537,7 @@ struct BotFactory : BotUnit {
                 }
             });
         }
-        if (gc.can_produce_robot(id, Mage)){
+        if (false && gc.can_produce_robot(id, Mage)){
             auto location = unit.get_location().get_map_location();
             // Not even sure about this, but yeah. If a mage hit will on average hit 4 enemies, go for it (compare to ranger score of 2)
             double score = splashDamagePotential * 0.5; // enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
@@ -1277,6 +1273,7 @@ int main() {
         totalTurnTime += turnTime;
         cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
         cout << "Attacker success rate: " << averageAttackerSuccessRate << endl;
+        cout << "Average healer success rate: " << averageHealerSuccessRate << endl;
 
         gc.write_team_array(0, state.totalUnitCount);
 
