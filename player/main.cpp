@@ -536,26 +536,30 @@ struct BotFactory : BotUnit {
             });
         }
         if (gc.can_produce_robot(id, Healer)){
-            double score = 0.0;
-            if (state.typeCount[Ranger] > 6) {
-                score += 2.5;
-            }
-            if (state.typeCount[Ranger] > 10) {
-                score += 1.5;
-            }
-            if (state.typeCount[Ranger] > 14) {
-                score += 1.5;
-            }
-            if (state.totalRobotDamage > 200) {
-                score += 3.0;
-            }
-            score /= state.typeCount[Healer];
-            score += averageHealerSuccessRate * 1.8;
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
-                if (gc.can_produce_robot(id, Healer)) {
-                    gc.produce_robot(id, Healer);
+            int otherMilitary = state.typeCount[Ranger] + state.typeCount[Mage] + state.typeCount[Knight];
+            // Never have more healers than the combined total of other military units
+            if (otherMilitary > state.typeCount[Healer]) {
+                double score = 0.0;
+                if (state.typeCount[Ranger] > 6) {
+                    score += 2.5;
                 }
-            });
+                if (state.typeCount[Ranger] > 10) {
+                    score += 1.5;
+                }
+                if (state.typeCount[Ranger] > 14) {
+                    score += 1.5;
+                }
+                if (state.totalRobotDamage > 200) {
+                    score += 3.0;
+                }
+                score /= state.typeCount[Healer];
+                score += averageHealerSuccessRate * 1.8;
+                macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
+                    if (gc.can_produce_robot(id, Healer)) {
+                        gc.produce_robot(id, Healer);
+                    }
+                });
+            }
         }
     }
 };
