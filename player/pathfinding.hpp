@@ -172,6 +172,10 @@ struct PathfindingMap {
         return ret;
     }
 
+    void addInfluence(double influence, const MapLocation& pos) {
+        weights[pos.get_x()][pos.get_y()] += influence;
+    }
+
     void addInfluence(vector<vector<double> > influence, int x0, int y0) {
         int r = influence.size() / 2;
         for (int dx = -r; dx <= r; dx++) {
@@ -298,7 +302,7 @@ struct Pathfinder {
         return hasPath;
     }
 
-    MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
+    vector<Position> getPath (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
         int w = values.w;
         int h = values.h;
 
@@ -320,7 +324,7 @@ struct Pathfinder {
         pq.push(PathfindingEntry(0.0, bestPosition));
         cost[x0][y0] = 0;
         version[x0][y0] = pathfindingVersion;
-
+        parent[x0][y0] = bestPosition;
         double valueUpperBound = values.getMax();
     
         while (!pq.empty()) {
@@ -358,19 +362,19 @@ struct Pathfinder {
         while(!pq.empty()) pq.pop();
 
         Position currentPos = bestPosition;
-        if (currentPos.x == x0 && currentPos.y == y0) {
-            return MapLocation(from.get_planet(), currentPos.x, currentPos.y);
-        }
         vector<Position> path = {currentPos};
-        while (true) {
+        while (currentPos.x != x0 || currentPos.y != y0) {
             auto p = parent[currentPos.x][currentPos.y];
             path.push_back(p);
-            if (p.x == x0 && p.y == y0) {
-                break;
-            }
             currentPos = p;
         }
         reverse(path.begin(), path.end());
-        return MapLocation(from.get_planet(), currentPos.x, currentPos.y);
+        return path;
+    }
+
+    MapLocation getNextLocation (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
+        auto path = getPath(from, values, costs);
+        auto pos = path[path.size() > 1 ? 1 : 0];
+        return MapLocation(from.get_planet(), pos.x, pos.y);
     }
 };
