@@ -18,7 +18,8 @@ fi
 BC_DEPLOY=0
 if [ "$BC_DEPLOY" = '2' ]; then
     # We run out of memory with g++. Instead we ship a pre-compiled binary.
-    echo running chmod
+    echo running chmod with prebuilt binary
+    echo commit hash $COMMIT_HASH
     chmod +x main
 elif [ "$BC_DEPLOY" = '1' ]; then
     echo g++ -std=c++11 -O2 -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
