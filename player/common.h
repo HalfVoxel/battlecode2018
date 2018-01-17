@@ -37,6 +37,8 @@ extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
 void invalidate_units();
 void invalidate_unit(unsigned int id);
 
+void setup_signal_handlers();
+
 inline double millis() {
     return 1000.0 * (double)clock() / (double)CLOCKS_PER_SEC;
 }

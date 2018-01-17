@@ -41,3 +41,82 @@ void invalidate_units() {
         invalidate_unit(unit.get_id());
     }
 }
+
+#ifdef CUSTOM_BACKTRACE
+
+#include <sstream>
+#include <cstring>
+#include <signal.h>
+#include <unistd.h>
+
+#include "stackwalk.h"
+
+static void addr2line(void* addr) {
+    ostringstream oss;
+    oss << "addr2line -afCpi -e main " << addr;
+    ignore = system(oss.str().c_str());
+}
+
+static void safe_write(const char* str, int fd = 1) {
+    size_t len = strlen(str);
+    int iter = 0;
+    while (len) {
+        ssize_t ret = write(fd, str, len);
+        if (ret > 0) {
+            str += ret;
+            len -= ret;
+            iter = 0;
+        } else if (ret == 0) {
+            ++iter;
+        } else {
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+                ++iter;
+            else perror("safe_write");
+        }
+        if (iter > 10) return;
+    }
+}
+
+inline void do_print_trace() {
+    safe_write("stack trace:\n");
+    MozStackWalk([](uint32_t, void* pc, void*, void*) { addr2line(pc); }, 0, 200, nullptr);
+    safe_write("--end trace--\n");
+}
+
+static void sighandler(int sig, siginfo_t *si, void* arg) {
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGABRT, SIG_DFL);
+    signal(sig, SIG_DFL);
+    safe_write("\n\n!!! caught signal: ");
+    safe_write(strsignal(sig));
+    safe_write("\non line:\n");
+    ucontext_t *context = (ucontext_t *)arg;
+    addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
+    do_print_trace();
+    safe_write("flushing stdio\n");
+    fflush(stdout);
+    fflush(stderr);
+    raise(SIGABRT);
+}
+
+void print_trace() {
+    fflush(stdout);
+    do_print_trace();
+    exit(1);
+}
+
+void setup_signal_handlers() {
+    struct sigaction action;
+    action.sa_sigaction = &sighandler;
+    action.sa_flags = SA_SIGINFO;
+    sigaction(SIGSEGV,&action,nullptr);
+    sigaction(SIGABRT,&action,nullptr);
+    sigaction(SIGBUS,&action,nullptr);
+    sigaction(SIGFPE,&action,nullptr);
+    sigaction(SIGILL,&action,nullptr);
+    sigaction(SIGINT,&action,nullptr);
+    sigaction(SIGTERM,&action,nullptr);
+    cerr << "signal setup complete" << endl;
+}
+
+#endif
