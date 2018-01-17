@@ -1222,6 +1222,7 @@ int main() {
         time_t t0 = millis();
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
+        printf("Time remaining: %d\n", gc.get_time_left_ms());
 
         updateResearchStatus();
         findUnits();
