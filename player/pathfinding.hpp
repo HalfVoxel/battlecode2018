@@ -237,18 +237,18 @@ struct PathfindingMap {
         }
     }
 };
-    
-vector<vector<double> > cost(MAX_MAP_SIZE, vector<double>(MAX_MAP_SIZE));
-vector<vector<int> > version(MAX_MAP_SIZE, vector<int>(MAX_MAP_SIZE));
-vector<vector<Position> > parent(MAX_MAP_SIZE, vector<Position>(MAX_MAP_SIZE));
-priority_queue<PathfindingEntry> pq;
-int pathfindingVersion = 0;
 
 struct Pathfinder {
 
     double bestScore;
 
     bool existsPathToLocation(const MapLocation& from, const MapLocation& to, const PathfindingMap& costs) {
+        static vector<vector<double> > cost(MAX_MAP_SIZE, vector<double>(MAX_MAP_SIZE));
+        static vector<vector<int> > version(MAX_MAP_SIZE, vector<int>(MAX_MAP_SIZE));
+        static vector<vector<Position> > parent(MAX_MAP_SIZE, vector<Position>(MAX_MAP_SIZE));
+        static priority_queue<PathfindingEntry> pq;
+        static int pathfindingVersion = 0;
+
         int w = costs.w;
         int h = costs.h;
         // Make sure map is sane
@@ -303,6 +303,12 @@ struct Pathfinder {
     }
 
     vector<Position> getPath (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
+        static vector<vector<double> > cost(MAX_MAP_SIZE, vector<double>(MAX_MAP_SIZE));
+        static vector<vector<int> > version(MAX_MAP_SIZE, vector<int>(MAX_MAP_SIZE));
+        static vector<vector<Position> > parent(MAX_MAP_SIZE, vector<Position>(MAX_MAP_SIZE));
+        static priority_queue<PathfindingEntry> pq;
+        static int pathfindingVersion = 0;
+
         int w = values.w;
         int h = values.h;
 

@@ -5,6 +5,8 @@
 using namespace bc;
 using namespace std;
 
+double averageAttackerSuccessRate;
+
 // Relative values of different unit types when at "low" (not full) health
 float unit_defensive_strategic_value[] = {
     1, // Worker

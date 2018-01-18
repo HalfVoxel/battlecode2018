@@ -3,7 +3,7 @@
 #include "common.h"
 #include "pathfinding.hpp"
 
-double averageAttackerSuccessRate;
+extern double averageAttackerSuccessRate;
 
 struct BotUnit {
     bc::Unit unit;
