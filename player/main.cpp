@@ -536,6 +536,12 @@ struct BotFactory : BotUnit {
                 break;
             }
         }
+
+        if (!anyReasonableLandingSpotOnInitialMars && gc.get_round() >= 710) {
+            // Don't produce any more units as karbonite will likely be the tie breaker
+            return;
+        }
+
         if (gc.can_produce_robot(id, Ranger)){
             double score = 2;
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
