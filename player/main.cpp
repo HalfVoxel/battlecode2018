@@ -1216,8 +1216,8 @@ void* __libc_stack_end;
 int main() {
 #ifdef CUSTOM_BACKTRACE
     __libc_stack_end = __builtin_frame_address(0);
-    setup_signal_handlers();
 #endif
+    setup_signal_handlers();
     srand(time(0));
 
     printf("Player C++ bot starting\n");

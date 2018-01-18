@@ -1,6 +1,11 @@
 #include "common.h"
 #include "bot_unit.h"
 
+#include <sstream>
+#include <cstring>
+#include <signal.h>
+#include <unistd.h>
+
 using namespace bc;
 
 GameController gc;
@@ -42,15 +47,6 @@ void invalidate_units() {
     }
 }
 
-#ifdef CUSTOM_BACKTRACE
-
-#include <sstream>
-#include <cstring>
-#include <signal.h>
-#include <unistd.h>
-
-#include "stackwalk.h"
-
 static void addr2line(void* addr) {
     ostringstream oss;
     oss << "addr2line -afCpi -e main " << addr;
@@ -77,11 +73,17 @@ static void safe_write(const char* str, int fd = 1) {
     }
 }
 
-inline void do_print_trace() {
+#ifdef CUSTOM_BACKTRACE
+
+#include "stackwalk.h"
+
+void print_trace() {
     safe_write("stack trace:\n");
     MozStackWalk([](uint32_t, void* pc, void*, void*) { addr2line(pc); }, 0, 200, nullptr);
     safe_write("--end trace--\n");
 }
+
+#endif
 
 static void sighandler(int sig, siginfo_t *si, void* arg) {
     signal(SIGSEGV, SIG_DFL);
@@ -92,17 +94,11 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     safe_write("\non line:\n");
     ucontext_t *context = (ucontext_t *)arg;
     addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
-    do_print_trace();
+    print_trace();
     safe_write("flushing stdio\n");
     fflush(stdout);
     fflush(stderr);
     raise(SIGABRT);
-}
-
-void print_trace() {
-    fflush(stdout);
-    do_print_trace();
-    exit(1);
 }
 
 void setup_signal_handlers() {
@@ -114,9 +110,9 @@ void setup_signal_handlers() {
     sigaction(SIGBUS,&action,nullptr);
     sigaction(SIGFPE,&action,nullptr);
     sigaction(SIGILL,&action,nullptr);
-    sigaction(SIGINT,&action,nullptr);
     sigaction(SIGTERM,&action,nullptr);
+#ifdef CUSTOM_BACKTRACE
+    sigaction(SIGINT,&action,nullptr);
+#endif
     cerr << "signal setup complete" << endl;
 }
-
-#endif
