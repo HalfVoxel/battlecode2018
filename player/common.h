@@ -7,6 +7,8 @@
 #include <stack>
 #include <map>
 
+#define NO_IMPLICIT_COPIES
+
 #include "bc.hpp"
 
 #define MAX_MAP_SIZE 50
