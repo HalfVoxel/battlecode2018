@@ -14,7 +14,7 @@ vector<vector<double>> mars_karbonite_map(int time) {
 
     // Just in case some karbonite actually exists at mars at start
     for (int x = 0; x < w; x++) {
-        for (int y = 0; y < w; y++) {
+        for (int y = 0; y < h; y++) {
             res[x][y] += marsMap.get_initial_karbonite_at(MapLocation(Mars, x, y));
         }
     }
