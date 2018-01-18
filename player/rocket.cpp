@@ -73,7 +73,7 @@ tuple<bool,MapLocation,int> find_best_landing_spot() {
                     totalResources += karb[p.first][p.second];
                     totalArea += 1;
 
-                    float nodeScore = -karb[p.first][p.second] + dontLandSpots.weights[p.first][p.second];
+                    float nodeScore = -karb[p.first][p.second] - dontLandSpots.weights[p.first][p.second];
                     if (nodeScore > inRegionScore) {
                         inRegionScore = nodeScore;
                         bestInRegion = p;
