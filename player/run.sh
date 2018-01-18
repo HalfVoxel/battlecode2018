@@ -1,8 +1,6 @@
 #!/bin/sh
 # build the program!
-# note: there will eventually be a separate build step for your bot, but for now it counts against your runtime.
 
-# we provide this env variable for you
 if [ "$BC_PLATFORM" = 'LINUX' ]; then
     LIBRARIES="-lbattlecode-linux -lutil -ldl -lrt -pthread -lgcc_s -lc -lm -L../battlecode/c/lib"
     INCLUDES="-I../battlecode/c/include -I."
@@ -15,15 +13,19 @@ else
     exit 1
 fi
 
+DEPLOY_CC='g++ -std=c++11 -O2 -g -rdynamic -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie'
+
 BC_DEPLOY=0
 if [ "$BC_DEPLOY" = '2' ]; then
-    # We run out of memory with g++. Instead we ship a pre-compiled binary.
-    echo running chmod with prebuilt binary
-    echo commit hash $COMMIT_HASH
-    chmod +x main
+    # We run out of memory with g++. Instead we ship a pre-compiled binary, and just link it in this step.
+    echo $DEPLOY_CC everything.o -o main $LIBRARIES
+    $DEPLOY_CC everything.o -o main $LIBRARIES
+    echo starting
 elif [ "$BC_DEPLOY" = '1' ]; then
-    echo g++ -std=c++11 -O2 -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
-    g++ -std=c++11 -O2 -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
+    echo $DEPLOY_CC everything.cpp -c $INCLUDES
+    $DEPLOY_CC everything.cpp -c $INCLUDES
+    echo $DEPLOY_CC everything.o -o main $LIBRARIES
+    $DEPLOY_CC everything.o -o main $LIBRARIES
 else
     echo g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
     g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
