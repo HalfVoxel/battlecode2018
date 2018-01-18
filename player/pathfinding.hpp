@@ -154,8 +154,8 @@ struct PathfindingMap {
 
     double sum() const {
         double ret = 0.0;
-        for (int i = 0; i < h; i++) {
-            for (int j = 0; j < w; j++) {
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
                 ret += weights[i][j];
             }
         }
@@ -164,8 +164,8 @@ struct PathfindingMap {
 
     double getMax() const {
         double ret = 0.0;
-        for (int i = 0; i < h; i++) {
-            for (int j = 0; j < w; j++) {
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
                 ret = max(ret, weights[i][j]);
             }
         }
