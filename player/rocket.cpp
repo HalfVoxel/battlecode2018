@@ -24,7 +24,10 @@ vector<vector<double>> mars_karbonite_map(int time) {
         if (asteroids.has_asteroid_on_round(t)) {
             auto asteroid = asteroids.get_asteroid_on_round(t);
             auto loc = asteroid.get_map_location();
-            res[loc.get_x()][loc.get_y()] += asteroid.get_karbonite();
+            // Note: Assumes mars and earth have the same size
+            if (isOnMap(loc)) {
+                res[loc.get_x()][loc.get_y()] += asteroid.get_karbonite();
+            }
         }
     }
 

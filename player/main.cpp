@@ -86,9 +86,6 @@ struct MacroObject {
 
 vector<MacroObject> macroObjects;
 
-bool isOnMap(MapLocation location) {
-   return location.get_x() >= 0 && location.get_y() >= 0 && location.get_x() < w && location.get_y() < h;
-}
 
 struct BotWorker : BotUnit {
     int rocketDelay = 0;

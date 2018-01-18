@@ -42,3 +42,7 @@ void setup_signal_handlers();
 inline double millis() {
     return 1000.0 * (double)clock() / (double)CLOCKS_PER_SEC;
 }
+
+inline bool isOnMap(bc::MapLocation location) {
+   return location.get_x() >= 0 && location.get_y() >= 0 && location.get_x() < w && location.get_y() < h;
+}
