@@ -779,7 +779,7 @@ void updateEnemyPositionMap() {
                     }
                     int x = i+k;
                     int y = j+l;
-                    if (x >= 0 && y >= 0 && x < w && y < w) {
+                    if (x >= 0 && y >= 0 && x < w && y < h) {
                         if (planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
                             ++cnt;
                         }
@@ -796,15 +796,15 @@ void updateEnemyPositionMap() {
                     }
                     int x = i+k;
                     int y = j+l;
-                    if (x >= 0 && y >= 0 && x < w && y < w) {
-                        double w;
+                    if (x >= 0 && y >= 0 && x < w && y < h) {
+                        double we;
                         if (planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
-                            w = weight2;
+                            we = weight2;
                         }
                         else {
-                            w = 0;
+                            we = 0;
                         }
-                        newEnemyPositionMap.weights[x][y] += w * enemyPositionMap.weights[i][j];
+                        newEnemyPositionMap.weights[x][y] += we * enemyPositionMap.weights[i][j];
                     }
                 }
             }
@@ -860,7 +860,7 @@ void updateKarboniteMap() {
                 for (int l = -1; l <= 1; l++) {
                     int x = i+k;
                     int y = j+l;
-                    if (x >= 0 && y >= 0 && x < w && y < w){
+                    if (x >= 0 && y >= 0 && x < w && y < h){
                         double kar = karboniteMap.weights[x][y];
                         kar = log(kar + 1);
                         if (k != 0 || l != 0)
