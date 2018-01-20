@@ -534,8 +534,8 @@ struct BotFactory : BotUnit {
             }
         }
 
-        if (!anyReasonableLandingSpotOnInitialMars && gc.get_round() >= 710) {
-            // Don't produce any more units as karbonite will likely be the tie breaker
+        if (gc.get_round() >= 745) {
+            // Don't produce any more units as they won't have time to get into a rocket
             return;
         }
 
