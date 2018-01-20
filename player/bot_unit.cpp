@@ -45,13 +45,21 @@ PathfindingMap BotUnit::getTargetMap() { return PathfindingMap(); }
 PathfindingMap BotUnit::getCostMap() { return PathfindingMap(); }
 
 void addRocketTarget(const Unit& unit, PathfindingMap& targetMap) {
-    for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-        auto unit = gc.get_unit(rocketId);
-        if(!unit.get_location().is_on_map()) {
-            continue;
+
+    if (gc.get_round() > 650) {
+        if (planet == Earth) {
+            targetMap += rocketAttractionMap;
         }
-        auto rocketLocation = unit.get_location().get_map_location();
-        targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 10000;
+    }
+    else {
+        for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
+            auto unit = gc.get_unit(rocketId);
+            if(!unit.get_location().is_on_map()) {
+                continue;
+            }
+            auto rocketLocation = unit.get_location().get_map_location();
+            targetMap.weights[rocketLocation.get_x()][rocketLocation.get_y()] += 10000;
+        }
     }
 }
 

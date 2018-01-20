@@ -15,6 +15,7 @@ extern PathfindingMap enemyNearbyMap;
 extern PathfindingMap enemyPositionMap;
 extern PathfindingMap nearbyFriendMap;
 extern PathfindingMap rocketHazardMap;
+extern PathfindingMap rocketAttractionMap;
 
 enum class MapType { Target, Cost };
 
