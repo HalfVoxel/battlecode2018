@@ -176,8 +176,30 @@ void mage_attack(const Unit& unit) {
 
     if (!unit.get_location().is_on_map()) return;
 
-    // Calls on the controller take unit IDs for ownership reasons.
+    int attackRange = unit.get_attack_range();
     const auto locus = unit.get_location().get_map_location();
+    int x = locus.get_x();
+    int y = locus.get_y();
+    bool canShoot = false;
+    for (int dx = -5; dx <= 5 && !canShoot; ++dx) {
+        for (int dy = -5; dy <= 5; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 > attackRange)
+                continue;
+            int nx = x + dx;
+            int ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                continue;
+            if (enemyExactPositionMap.weights[nx][ny] > 0) {
+                canShoot = true;
+            }
+        }
+    }
+    if (!canShoot) {
+        return;
+    }
+
+    // Calls on the controller take unit IDs for ownership reasons.
     const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range() + 20);
 
     const Unit* best_unit = nullptr;
