@@ -12,6 +12,7 @@ PathfindingMap damagedStructureMap;
 PathfindingMap passableMap;
 PathfindingMap enemyNearbyMap;
 PathfindingMap enemyPositionMap;
+PathfindingMap enemyExactPositionMap;
 PathfindingMap nearbyFriendMap;
 PathfindingMap rocketHazardMap;
 PathfindingMap rocketAttractionMap;

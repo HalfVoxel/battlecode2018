@@ -13,6 +13,7 @@ extern PathfindingMap damagedStructureMap;
 extern PathfindingMap passableMap;
 extern PathfindingMap enemyNearbyMap;
 extern PathfindingMap enemyPositionMap;
+extern PathfindingMap enemyExactPositionMap;
 extern PathfindingMap nearbyFriendMap;
 extern PathfindingMap rocketHazardMap;
 extern PathfindingMap rocketAttractionMap;

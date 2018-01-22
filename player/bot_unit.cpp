@@ -237,11 +237,33 @@ void attack_all_in_range(const Unit& unit) {
     if (!gc.is_attack_ready(id)) return;
 
     if (!unit.get_location().is_on_map()) return;
+
+    int attackRange = unit.get_attack_range();
+    const auto locus = unit.get_location().get_map_location();
+    int x = locus.get_x();
+    int y = locus.get_y();
+    bool canShoot = false;
+    for (int dx = -7; dx <= 7 && !canShoot; ++dx) {
+        for (int dy = -7; dy <= 7; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 > attackRange)
+                continue;
+            int nx = x + dx;
+            int ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                continue;
+            if (enemyExactPositionMap.weights[nx][ny] > 0) {
+                canShoot = true;
+            }
+        }
+    }
+    if (!canShoot) {
+        return;
+    }
     double start = millis();
 
     // Calls on the controller take unit IDs for ownership reasons.
-    const auto locus = unit.get_location().get_map_location();
-    const auto nearby = gc.sense_nearby_units(locus, unit.get_attack_range());
+    const auto nearby = gc.sense_nearby_units(locus, attackRange);
 
     const Unit* best_unit = nullptr;
     float totalWeight = 0;

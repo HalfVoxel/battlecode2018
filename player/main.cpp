@@ -936,6 +936,7 @@ void updateEnemyInfluenceMaps(){
     enemyInfluenceMap = PathfindingMap(w, h);
     enemyNearbyMap = PathfindingMap(w, h);
     healerOverchargeMap = PathfindingMap(w, h);
+    enemyExactPositionMap = PathfindingMap(w, h);
     for (auto& u : enemyUnits) {
         if (u.get_location().is_on_map()) {
             auto pos = u.get_location().get_map_location();
@@ -950,6 +951,7 @@ void updateEnemyInfluenceMaps(){
             }
             enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
             enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
+            enemyExactPositionMap.weights[pos.get_x()][pos.get_y()] = 1;
             healerOverchargeMap.maxInfluence(healerOverchargeInfluence, pos.get_x(), pos.get_y());
         }
     }
@@ -1675,6 +1677,7 @@ int main() {
         cout << "Turn time: " << turnTime << endl;
         totalTurnTime += turnTime;
         cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
+        cout << "Total: " << std::round(totalTurnTime) << endl;
         cout << "Attacker success rate: " << averageAttackerSuccessRate << endl;
         cout << "Average healer success rate: " << averageHealerSuccessRate << endl;
 
