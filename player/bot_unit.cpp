@@ -53,7 +53,7 @@ void addRocketTarget(const Unit& unit, PathfindingMap& targetMap) {
     }
     else {
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
-            if (!gc.has_unit(rocketId)) {
+            if (!gc.can_sense_unit(rocketId)) {
                 continue;
             }
             auto unit = gc.get_unit(rocketId);
