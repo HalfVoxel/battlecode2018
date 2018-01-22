@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import argparse
+import shutil
+import subprocess
+
+parser = argparse.ArgumentParser(description='Backup BattleCode Bots')
+parser.add_argument("tag")
+args = parser.parse_args()
+
+tag = args.tag
+
+if os.path.exists("backups/" + tag):
+    print("Tag already exists")
+    exit(1)
+
+yellow = (199, 196, 0)
+colorFormat = "\x1b[38;2;{0[0]};{0[1]};{0[2]}m"
+
+yellowStr = colorFormat.format(yellow)
+reset = "\033[0m"
+
+
+def detect_platform():
+    if sys.platform.startswith("linux"):
+        return "LINUX"
+    elif sys.platform == 'win32':
+        return "WIN32"
+    elif sys.platform == 'darwin':
+        return 'DARWIN'
+    else:
+        raise Exception("Unknown os: " + sys.platform)
+
+
+print(yellowStr + "Building..." + reset)
+env = os.environ.copy()
+env["BC_PLATFORM"] = detect_platform()
+if os.path.isfile("battlecode"):
+    os.remove("battlecode")
+
+subprocess.call(["ln -s bc18-scaffold/battlecode battlecode"], shell=True)
+subprocess.call(["./build.sh"], env=env, cwd="player")
+subprocess.call(["rm battlecode"], shell=True)
+
+
+def backup(tag):
+    shutil.copytree("player", "backups/" + tag)
+
+
+backup(tag)

@@ -1,6 +1,6 @@
 [submodule "bc18-scaffold"]
 	path = bc18-scaffold
-	url = https://github.com/battlecode/bc18-scaffold.git
+	url = git@github.com:HalfVoxel/bc18-scaffold.git
 [submodule "battlecode-2018-cpp-api"]
 	path = battlecode-2018-cpp-api
 	url = git@github.com:HalfVoxel/battlecode-2018-cpp-api.git
