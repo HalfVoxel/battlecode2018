@@ -760,7 +760,6 @@ struct Researcher {
                 if (mapConnectedness <= 2) {
                     scores[Rocket] += 10;
                 }
-                cout << "ROCKET SCORE:" << scores[Rocket] << endl;
                 break;
             case 1:
                 scores[Rocket] = 6;
@@ -830,7 +829,7 @@ void updateEnemyPositionMap() {
                     int x = i+k;
                     int y = j+l;
                     if (x >= 0 && y >= 0 && x < w && y < h) {
-                        if (planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                        if (passableMap.weights[x][y] <= 1000){
                             ++cnt;
                         }
                     }
@@ -848,7 +847,7 @@ void updateEnemyPositionMap() {
                     int y = j+l;
                     if (x >= 0 && y >= 0 && x < w && y < h) {
                         double we;
-                        if (planetMap->is_passable_terrain_at(MapLocation(gc.get_planet(), x, y))){
+                        if (passableMap.weights[x][y] <= 1000){
                             we = weight2;
                         }
                         else {
@@ -888,13 +887,23 @@ void initKarboniteMap() {
     }
 }
 
+void updateCanSenseLocation() {
+    canSenseLocation = vector<vector<bool>>(w, vector<bool>(h));
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            auto location = MapLocation(gc.get_planet(), i, j);
+            canSenseLocation[i][j] = gc.can_sense_location(location);
+        }
+    }
+}
+
 // NOTE: this call also updates enemy position map for some reason
 void updateKarboniteMap() {
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
-            auto location = MapLocation(gc.get_planet(), i, j);
-            if (gc.can_sense_location(location)) {
+            if (canSenseLocation[i][j]) {
                 if (karboniteMap.weights[i][j]) {
+                    const MapLocation location(planet, i, j);
                     int karbonite = gc.get_karbonite_at(location);
                     karboniteMap.weights[i][j] = karbonite;
                 }
@@ -1424,7 +1433,7 @@ void coordinateMageAttacks() {
                 cout << node.first << " " << node.second << endl;
             }
             MapLocation location(planet, path[0].first, path[0].second);
-            if (!gc.can_sense_location(location)) {
+            if (!canSenseLocation[path[0].first][path[0].second]) {
                 cout << "Error! Couldn't sense location!" << endl;
                 continue;
             }
@@ -1556,10 +1565,14 @@ int main() {
 
     enemyPositionMap = PathfindingMap(w, h);
 
+    double preprocessingComputationTime = 0;
     double totalTurnTime = 0.0;
-    // loop through the whole game.
     mapComputationTime = 0;
+    targetMapComputationTime = 0;
+    costMapComputationTime = 0;
+    attackComputationTime = 0;
     pathfindingTime = 0;
+    // loop through the whole game.
     while (true) {
         time_t t0 = millis();
         unsigned round = gc.get_round();
@@ -1569,6 +1582,7 @@ int main() {
         updateResearchStatus();
         findUnits();
 
+        updateCanSenseLocation();
         reusableMaps.clear();
         updateAsteroids();
         updateEnemyPositionMap();
@@ -1615,7 +1629,7 @@ int main() {
         updateStuckUnitMap();
 
         auto t1 = millis();
-        cout << "Preprocessing: " << (t1-t0) << endl;
+        preprocessingComputationTime += t1-t0;
 
         bool firstIteration = true;
         while (true) {
@@ -1646,9 +1660,13 @@ int main() {
         cout << "Research: " << (t6 - t5) << endl;
 
         cout << "Map computation time: " << std::round(mapComputationTime) << endl;
+        cout << "   Target map computation time: " << std::round(targetMapComputationTime) << endl;
+        cout << "   Cost map computation time: " << std::round(costMapComputationTime) << endl;
         cout << "Pathfinding time: " << std::round(pathfindingTime) << endl;
+        cout << "Attack computation time: " << std::round(attackComputationTime) << endl;
         cout << "Mage coordination time: " << std::round(mageCoordinationTime) << endl;
         cout << "Invalidation time: " << std::round(unitInvalidationTime) << endl;
+        cout << "Preprocessing time: " << std::round(preprocessingComputationTime) << endl;
         for (auto it : timeUsed) {
             cout << unitTypeToString[it.first] << ": " << std::round(it.second) << endl;
         }

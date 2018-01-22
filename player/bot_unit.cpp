@@ -95,7 +95,10 @@ MapLocation BotUnit::getNextLocation(MapLocation from, bool allowStructures) {
     }
     double start = millis();
     auto targetMap = getTargetMap();
+    targetMapComputationTime += millis() - start;
+    double start2 = millis();
     auto costMap = getCostMap();
+    costMapComputationTime += millis() - start2;
     if (allowStructures) {
         costMap.weights[x][y] = 1;
     }
@@ -234,6 +237,7 @@ void attack_all_in_range(const Unit& unit) {
     if (!gc.is_attack_ready(id)) return;
 
     if (!unit.get_location().is_on_map()) return;
+    double start = millis();
 
     // Calls on the controller take unit IDs for ownership reasons.
     const auto locus = unit.get_location().get_map_location();
@@ -272,6 +276,7 @@ void attack_all_in_range(const Unit& unit) {
     double interpolationFactor = 0.999;
     averageAttackerSuccessRate = averageAttackerSuccessRate * interpolationFactor + attackSuccessful * (1-interpolationFactor);
 
+    attackComputationTime += millis()-start;
 }
 
 PathfindingMap BotUnit::defaultMilitaryTargetMap() {

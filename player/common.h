@@ -23,8 +23,12 @@ extern std::vector<bc::Unit> enemyUnits;
 extern std::vector<bc::Unit> allUnits;
 extern double pathfindingTime;
 extern double mapComputationTime;
+extern double targetMapComputationTime;
+extern double costMapComputationTime;
+extern double attackComputationTime;
 extern double unitInvalidationTime;
 extern std::map<unsigned int, BotUnit*> unitMap;
+extern std::vector<std::vector<bool> > canSenseLocation;
 
 extern bc::Team ourTeam;
 extern bc::Team enemyTeam;

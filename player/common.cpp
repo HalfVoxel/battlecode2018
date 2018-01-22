@@ -15,7 +15,11 @@ std::vector<bc::Unit> enemyUnits;
 std::vector<bc::Unit> allUnits;
 double pathfindingTime;
 double mapComputationTime;
+double targetMapComputationTime;
+double costMapComputationTime;
+double attackComputationTime;;
 double unitInvalidationTime;
+vector<vector<bool> > canSenseLocation;
 map<unsigned int, BotUnit*> unitMap;
 
 Team ourTeam;
