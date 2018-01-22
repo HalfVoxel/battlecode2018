@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import subprocess
+import re
+import sys
+import random
+import signal
+from itertools import chain
+
+maps = [x.replace(".bc18map", "") for x in os.listdir("bc18-scaffold/battlecode-maps") if x.endswith(".bc18map")]
+
+parser = argparse.ArgumentParser(description='Run BattleCode Bots')
+parser.add_argument("-a", "--teamA", help="Team A")
+parser.add_argument("-b", "--teamB", help="Team B")
+parser.add_argument("--tournament", help="Play multiple games and rank the teams", action="store_true")
+parser.add_argument("-q", "--quiet", help="Don't print bot logs", action="store_true")
+parser.add_argument("--seed", help="Seed for the game or tournament", type=int)
+parser.add_argument("--threads", help="Number of threads to use", type=int, default=2)
+parser.add_argument("--dnaA", help="Genetic information for Team A", nargs="*")
+parser.add_argument("--dnaB", help="Genetic information for Team B", nargs="*")
+args = parser.parse_args()
+
+if args.threads <= 0:
+    print("Thread count must be positive")
+    exit(1)
+
+if args.threads % 2 != 0 and args.threads != 1:
+    print("Only supports an even number of threads or a single thread")
+    exit(1)
+
+red = (201, 27, 0)
+green = (0, 194, 0)
+yellow = (199, 196, 0)
+gray = (150, 150, 150)
+
+colorFormat = "\x1b[38;2;{0[0]};{0[1]};{0[2]}m"
+redStr = colorFormat.format(red)
+greenStr = colorFormat.format(green)
+yellowStr = colorFormat.format(yellow)
+grayStr = colorFormat.format(gray)
+reset = "\033[0m"
+clearScreen = "\033[2J"
+active_commands = []
+
+sys.stdout.flush()
+
+
+print(yellowStr + "Backing up..." + reset)
+backupTag = "tmp" + str(random.randint(0, 10000000))
+subprocess.call(["./backup", backupTag])
+env = os.environ.copy()
+env["NO_BUILD"] = '1'
+
+
+if args.teamA is None:
+    args.teamA = backupTag
+
+if args.teamB is None:
+    args.teamB = backupTag
+
+
+def execute(cmd, quiet):
+
+    popen = subprocess.Popen(cmd,
+                             bufsize=-1,
+                             stdout=subprocess.PIPE,
+                             stderr=None,  # subprocess.DEVNULL if quiet else None,
+                             universal_newlines=False,
+                             env=env
+                             )
+
+    active_commands.append(popen)
+    yield None
+    while True:
+        b = popen.stdout.readline()
+        if b == b"":
+            break
+        else:
+            s = b.decode('utf-8')
+            if not quiet:
+                print(s, end="")
+            yield s
+
+    popen.stdout.close()
+    return_code = popen.wait()
+    active_commands.remove(popen)
+
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, cmd)
+
+    # return "\n".join(lines)
+
+
+def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
+    for mapName in maps:
+        args = [
+            "./battlecode.sh",
+        ]
+
+        args.append("--player1")
+        args.append(os.path.join(os.getcwd(), "backups/" + teamA))
+
+        args.append("--player2")
+        args.append(os.path.join(os.getcwd(), "backups/" + teamB))
+
+        args.append("--map")
+        args.append(mapName)
+
+        args.append("--working-dir")
+        args.append(workingDir)
+
+        winRegex = re.compile(r"Winner is player (\d)")
+        roundRegex = re.compile(r".* Round: (\d+)")
+        mapIndex = 0
+        lastRound = 0
+        try:
+            gen = execute(args, quiet)
+            next(gen)
+            yield None
+
+            for line in gen:
+                roundMatch = roundRegex.search(line)
+                if roundMatch is not None:
+                    lastRound = int(roundMatch.group(1))
+
+                if lastRound % 100 == 0:
+                    yield None
+
+                win = winRegex.search(line)
+                if win is not None:
+                    winningTeam = None
+                    if win.group(1) == "1":
+                        winningTeam = "A"
+                    elif win.group(1) == "2":
+                        winningTeam = "B"
+                    else:
+                        print("Couldn't parse winner: " + win.group(1))
+                        continue
+
+                    round = lastRound
+                    reason = ""
+                    mapIndex += 1
+                    yield (winningTeam, round, reason, mapName)
+        except subprocess.CalledProcessError:
+            print("\rServer crashed. Ignoring the rest of the maps")
+            return
+
+
+def printResult(result):
+    team = result[0]
+    round = result[1]
+    reason = result[2]
+    teamStr = (greenStr if team == "A" else redStr) + team + reset
+    print(teamStr + " won at round " + str(round) + " " + reason)
+
+
+# Make sure the seed is reset to 0 even if the user terminates the program
+def sigint(signal, frame):
+    for p in active_commands:
+        p.kill()
+
+    sys.exit(0)
+
+
+def divide_into_chunks(items, number_of_chunks):
+    num = int(len(items) / number_of_chunks)
+    result = [items[i:i + num] for i in range(0, (number_of_chunks - 1) * num, num)]
+    result.append(items[(number_of_chunks - 1) * num:])
+    return result
+
+
+workingDirIndex = 0
+
+def run_tournament_part(teamA, teamB, dnaA, dnaB, switch, seed, maps):
+    global workingDirIndex
+    workingDir = "workingDir" + str(workingDirIndex)
+    workingDirIndex += 1
+
+    if switch:
+        teamA, teamB = teamB, teamA
+        dnaA, dnaB = dnaB, dnaA
+
+    gen = run(teamA, teamB, maps, True, seed, dnaA, dnaB, workingDir)
+
+    for result in gen:
+        if result is None:
+            yield None
+            continue
+
+        mapStr = yellowStr + result[3].ljust(12) + reset + " " + ("B vs A" if switch else "A vs B") + ": "
+        sys.stdout.flush()
+
+        if switch:
+            result = ("B" if result[0] == "A" else "A", result[1], result[2])
+
+        print("\r" + mapStr, end="                  ")
+        printResult(result)
+
+        yield result[0] == "A"
+
+
+def parallel(chains):
+    chains = chains[:]
+    while len(chains) > 0:
+        toRemove = []
+        for chain in chains:
+            try:
+                n = next(chain)
+                if n is not None:
+                    yield n
+            except StopIteration:
+                toRemove.append(chain)
+
+        for r in toRemove:
+            chains.remove(r)
+
+
+signal.signal(signal.SIGINT, sigint)
+
+startSeed = args.seed if args.seed is not None else 0
+if args.tournament:
+    print(yellowStr + "Running tournament..." + reset)
+    teamAwins = 0
+    totalCount = 0
+
+    for seed in range(startSeed, startSeed + 4):
+        if seed != startSeed:
+            print("\n\nContinuing with new seed...\n")
+
+        # Run AvsB and BvsA in parallel
+        if args.threads == 1:
+            g1 = run_tournament_part(args.teamA, args.teamB, args.dnaA, args.dnaB, False, seed, maps)
+            g2 = run_tournament_part(args.teamA, args.teamB, args.dnaA, args.dnaB, True, seed, maps)
+            for teamAwon in chain(g1, g2):
+                if teamAwon:
+                    teamAwins += 1
+                totalCount += 1
+        else:
+            map_chunks = divide_into_chunks(maps, args.threads // 2)
+            # At least 2 threads
+            chains = []
+            for chunk in map_chunks:
+                g1 = run_tournament_part(args.teamA, args.teamB, args.dnaA, args.dnaB, False, seed, chunk)
+                g2 = run_tournament_part(args.teamA, args.teamB, args.dnaA, args.dnaB, True, seed, chunk)
+                chains.append(g1)
+                chains.append(g2)
+
+            for teamAwon in parallel(chains):
+                if teamAwon:
+                    teamAwins += 1
+                totalCount += 1
+                percentage = (teamAwins / totalCount) * 100 if totalCount > 0 else 50
+                print("Team A has won %.1f%% of the time (%s of %s)" % (percentage, teamAwins, totalCount), end="                  ")
+                sys.stdout.flush()
+
+else:
+    actualMap = maps[lowerMaps.index(args.map.lower())]
+    printResult(next(run(args.teamA, args.teamB, [actualMap], args.quiet, startSeed, args.dnaA, args.dnaB)))
