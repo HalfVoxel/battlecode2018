@@ -119,7 +119,7 @@ struct BotWorker : BotUnit {
         }
 
         // Don't enter a rocket while constructing something
-        if (!didBuild || rocketDelay > 10) {
+        if ((!didBuild || rocketDelay > 10) && gc.get_round() < 600) {
             addRocketTarget(unit, targetMap);
         } else {
             rocketDelay++;
@@ -544,80 +544,82 @@ struct BotFactory : BotUnit {
             return;
         }
 
-        if (gc.can_produce_robot(id, Knight)){
-            double score = 1;
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
-                if (gc.can_produce_robot(id, Knight)) {
-                    gc.produce_robot(id, Knight);
-                }
-            });
-        }
-        if (gc.can_produce_robot(id, Ranger)){
-            double score = 2 + 20.0 / (10.0 + state.typeCount[Ranger]);
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
-                if (gc.can_produce_robot(id, Ranger)) {
-                    gc.produce_robot(id, Ranger);
-                }
-            });
-        }
-        if (gc.can_produce_robot(id, Worker)){
-            double score = 0;
-            auto researchInfo = gc.get_research_info();
-            if (state.typeCount[Worker] == 0 && (researchInfo.get_level(Rocket) >= 1 || state.typeCount[Factory] < 3)) {
-                score += 10;
-            }
-            if (gc.get_round() > 600 && state.typeCount[Worker] < 10) {
-                score += 10;
-            }
-            if (state.typeCount[Rocket] > 5) {
-                score += 10;
-            }
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Worker), 2, [=] {
-                if (gc.can_produce_robot(id, Worker)) {
-                    gc.produce_robot(id, Worker);
-                }
-            });
-        }
-        if (gc.can_produce_robot(id, Mage)){
-            auto location = unit.get_location().get_map_location();
-            // Not even sure about this, but yeah. If a mage hit will on average hit 4 enemies, go for it (compare to ranger score of 2)
-            double score = splashDamagePotential * 0.5; // enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
-            if (hasOvercharge) {
-                score += state.typeCount[Healer] * 2;
-            }
-            score /= state.typeCount[Mage] + 1.0;
-            macroObjects.emplace_back(score, unit_type_get_factory_cost(Mage), 2, [=] {
-                if (gc.can_produce_robot(id, Mage)) {
-                    gc.produce_robot(id, Mage);
-                }
-            });
-        }
-        if (gc.can_produce_robot(id, Healer)){
-            int otherMilitary = state.typeCount[Ranger] + state.typeCount[Mage] + state.typeCount[Knight];
-            // Never have more healers than the combined total of other military units
-            if (otherMilitary > state.typeCount[Healer]) {
-                double score = 0.0;
-                if (state.typeCount[Ranger] > 6) {
-                    score += 2.5;
-                }
-                if (state.typeCount[Ranger] > 10) {
-                    score += 1.5;
-                }
-                if (state.typeCount[Ranger] > 14) {
-                    score += 1.5;
-                }
-                if (state.totalRobotDamage > 200) {
-                    score += 3.0;
-                }
-                score /= state.typeCount[Healer];
-                score += averageHealerSuccessRate * 1.8;
-                if (hasOvercharge)
-                    score += 1.0;
-                macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
-                    if (gc.can_produce_robot(id, Healer)) {
-                        gc.produce_robot(id, Healer);
+        if (!unit.is_factory_producing()) {
+            {
+                double score = 1;
+                macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
+                    if (gc.can_produce_robot(id, Knight)) {
+                        gc.produce_robot(id, Knight);
                     }
                 });
+            }
+            {
+                double score = 2 + 20.0 / (10.0 + state.typeCount[Ranger]);
+                macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
+                    if (gc.can_produce_robot(id, Ranger)) {
+                        gc.produce_robot(id, Ranger);
+                    }
+                });
+            }
+            {
+                double score = 0;
+                auto researchInfo = gc.get_research_info();
+                if (state.typeCount[Worker] == 0 && (researchInfo.get_level(Rocket) >= 1 || state.typeCount[Factory] < 3)) {
+                    score += 10;
+                }
+                if (gc.get_round() > 600 && state.typeCount[Worker] < 10) {
+                    score += 10;
+                }
+                if (state.typeCount[Rocket] > 5) {
+                    score += 10;
+                }
+                macroObjects.emplace_back(score, unit_type_get_factory_cost(Worker), 2, [=] {
+                    if (gc.can_produce_robot(id, Worker)) {
+                        gc.produce_robot(id, Worker);
+                    }
+                });
+            }
+            {
+                auto location = unit.get_location().get_map_location();
+                // Not even sure about this, but yeah. If a mage hit will on average hit 4 enemies, go for it (compare to ranger score of 2)
+                double score = splashDamagePotential * 0.5; // enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
+                if (hasOvercharge) {
+                    score += state.typeCount[Healer] * 2;
+                }
+                score /= state.typeCount[Mage] + 1.0;
+                macroObjects.emplace_back(score, unit_type_get_factory_cost(Mage), 2, [=] {
+                    if (gc.can_produce_robot(id, Mage)) {
+                        gc.produce_robot(id, Mage);
+                    }
+                });
+            }
+            {
+                int otherMilitary = state.typeCount[Ranger] + state.typeCount[Mage] + state.typeCount[Knight];
+                // Never have more healers than the combined total of other military units
+                if (otherMilitary > state.typeCount[Healer]) {
+                    double score = 0.0;
+                    if (state.typeCount[Ranger] > 6) {
+                        score += 2.5;
+                    }
+                    if (state.typeCount[Ranger] > 10) {
+                        score += 1.5;
+                    }
+                    if (state.typeCount[Ranger] > 14) {
+                        score += 1.5;
+                    }
+                    if (state.totalRobotDamage > 200) {
+                        score += 3.0;
+                    }
+                    score /= state.typeCount[Healer];
+                    score += averageHealerSuccessRate * 1.8;
+                    if (hasOvercharge)
+                        score += 1.0;
+                    macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
+                        if (gc.can_produce_robot(id, Healer)) {
+                            gc.produce_robot(id, Healer);
+                        }
+                    });
+                }
             }
         }
     }
@@ -1375,6 +1377,9 @@ void coordinateMageAttacks() {
             int x = mapLocation.get_x();
             int y = mapLocation.get_y();
             distanceToMage.weights[x][y] = 0;
+            /*if (unit.get_movement_heat() < 10) {
+                distanceToMage.weights[x][y]--;
+            }*/
             minHealerSum[x][y] = healerMap.weights[x][y];
             bfsQueue.push(make_pair(x, y));
         }
