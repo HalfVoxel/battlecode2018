@@ -26,7 +26,7 @@ BC_DEPLOY=0
 if [ "$BC_DEPLOY" = '2' ]; then
     # We run out of memory with g++. Instead we ship a pre-compiled binary, and just link it in this step.
     step $DEPLOY_CC everything.o -o main $LIBRARIES
-    echo starting
+    echo starting $COMMIT_HASH
 elif [ "$BC_DEPLOY" = '1' ]; then
     step $DEPLOY_CC everything.cpp -c $INCLUDES
     step $DEPLOY_CC everything.o -o main $LIBRARIES
