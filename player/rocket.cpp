@@ -141,7 +141,8 @@ void BotRocket::tick() {
                 ++workerCount;
             }
         }
-        if (unit.get_structure_garrison().size() == unit.get_structure_max_capacity() || gc.get_round() == 749 || (workerCount && !launchedWorkerCount)) {
+        unsigned int countInGarrison = unit.get_structure_garrison().size();
+        if (countInGarrison == unit.get_structure_max_capacity() || gc.get_round() == 749 || (workerCount && !launchedWorkerCount) || (countInGarrison > 0 && unit.get_health() < unit.get_max_health()*0.6)) {
             bool anyLandingSpot;
             MapLocation landingSpot;
             int marsRegion;

@@ -220,6 +220,7 @@ void mage_attack(const Unit& unit) {
         //Attacking 'em enemies
         gc.attack(unit.get_id(), best_unit->get_id());
         invalidate_units();
+        cout << "Mage attack with score " << best_unit_score << endl;
     }
     double interpolationFactor = 0.999;
     averageAttackerSuccessRate = averageAttackerSuccessRate * interpolationFactor + attackSuccessful * (1-interpolationFactor);
@@ -291,7 +292,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
                 }
                 else {
-                    targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                    targetMap.maxInfluence(knightTargetInfluence, pos.get_x(), pos.get_y());
                 }
             }
         }
@@ -314,7 +315,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     }
                     auto pos = u.get_location().get_map_location();
                     double factor = 10;
-                    if (unit.get_unit_type() == Mage) {
+                    if (unit.get_unit_type() == Mage || unit.get_unit_type() == Knight) {
                         factor = 0.1;
                     }
                     targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), factor);

@@ -376,6 +376,9 @@ struct BotHealer : BotUnit {
                     targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 15 * (2.0 - remainingLife));
                 }
             }
+            if (hasOvercharge) {
+                targetMap += healerOverchargeMap * 1000;
+            }
             targetMap /= (enemyNearbyMap + 1.0);
             reusableMaps[reuseObject] = targetMap;
         }
@@ -493,6 +496,7 @@ struct BotHealer : BotUnit {
     }
 
     void doOvercharge() {
+        return;
         if (hasOvercharge && unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
             const auto nearby = gc.sense_nearby_units(unit.get_location().get_map_location(), unit.get_ability_range());
 
@@ -534,11 +538,19 @@ struct BotFactory : BotUnit {
             }
         }
 
-        if (gc.get_round() >= 745) {
+        if (gc.get_round() >= 742) {
             // Don't produce any more units as they won't have time to get into a rocket
             return;
         }
 
+        if (gc.can_produce_robot(id, Knight)){
+            double score = 1;
+            macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
+                if (gc.can_produce_robot(id, Knight)) {
+                    gc.produce_robot(id, Knight);
+                }
+            });
+        }
         if (gc.can_produce_robot(id, Ranger)){
             double score = 2;
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Ranger), 2, [=] {
@@ -562,10 +574,14 @@ struct BotFactory : BotUnit {
                 }
             });
         }
-        if (false && gc.can_produce_robot(id, Mage)){
+        if (gc.can_produce_robot(id, Mage)){
             auto location = unit.get_location().get_map_location();
             // Not even sure about this, but yeah. If a mage hit will on average hit 4 enemies, go for it (compare to ranger score of 2)
             double score = splashDamagePotential * 0.5; // enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
+            if (hasOvercharge) {
+                score += state.typeCount[Healer] * 2;
+            }
+            score /= state.typeCount[Mage] + 1.0;
             macroObjects.emplace_back(score, unit_type_get_factory_cost(Mage), 2, [=] {
                 if (gc.can_produce_robot(id, Mage)) {
                     gc.produce_robot(id, Mage);
@@ -591,6 +607,8 @@ struct BotFactory : BotUnit {
                 }
                 score /= state.typeCount[Healer];
                 score += averageHealerSuccessRate * 1.8;
+                if (hasOvercharge)
+                    score += 1.0;
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
                     if (gc.can_produce_robot(id, Healer)) {
                         gc.produce_robot(id, Healer);
@@ -655,9 +673,34 @@ struct Researcher {
         map<UnitType, double> scores;
 
         auto researchInfo = gc.get_research_info();
+        switch(researchInfo.get_level(Knight)) {
+            case 0:
+                scores[Knight] = 2 + 0.1 * state.typeCount[Knight];
+                break;
+            case 1:
+                scores[Knight] = 1 + 0.01 * state.typeCount[Knight];
+                break;
+            case 2:
+                scores[Knight] = 1 + 0.01 * state.typeCount[Knight];
+                break;
+        }
+        switch(researchInfo.get_level(Mage)) {
+            case 0:
+                scores[Mage] = 3 + 1.0 * state.typeCount[Mage];
+                break;
+            case 1:
+                scores[Mage] = 2.5 + 1.0 * state.typeCount[Mage];
+                break;
+            case 2:
+                scores[Mage] = 2 + 1.0 * state.typeCount[Mage];
+                break;
+        }
+        if (researchInfo.get_level(Healer) >= 3) {
+            scores[Mage] += 5;
+        }
         switch(researchInfo.get_level(Ranger)) {
             case 0:
-                scores[Ranger] = 30 + 0.1 * state.typeCount[Ranger];
+                scores[Ranger] = 5 + 0.1 * state.typeCount[Ranger];
                 break;
             case 1:
                 scores[Ranger] = 5 + 0.01 * state.typeCount[Ranger];
@@ -721,6 +764,9 @@ struct Researcher {
             case 2:
                 scores[Rocket] = 6;
                 break;
+        }
+        if (gc.get_round() > 645) {
+            scores[Rocket] = 0.01;
         }
 
         UnitType bestType = Mage;
@@ -876,6 +922,7 @@ void updateKarboniteMap() {
 void updateEnemyInfluenceMaps(){
     enemyInfluenceMap = PathfindingMap(w, h);
     enemyNearbyMap = PathfindingMap(w, h);
+    healerOverchargeMap = PathfindingMap(w, h);
     for (auto& u : enemyUnits) {
         if (u.get_location().is_on_map()) {
             auto pos = u.get_location().get_map_location();
@@ -890,6 +937,7 @@ void updateEnemyInfluenceMaps(){
             }
             enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
             enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
+            healerOverchargeMap.maxInfluence(healerOverchargeInfluence, pos.get_x(), pos.get_y());
         }
     }
 
@@ -1206,7 +1254,7 @@ int computeConnectedness() {
                 if (path.size() > 1) {
                     changed = true;
                     connectedness++;
-                    for (int i = 1; i < path.size() - 1; i++) {
+                    for (size_t i = 1; i < path.size() - 1; i++) {
                         passableMap2.addInfluence(numeric_limits<double>::infinity(), MapLocation(pos.get_planet(), path[i].x, path[i].y));
                     }
                 }
@@ -1216,6 +1264,186 @@ int computeConnectedness() {
 
     cout << "Map is " << connectedness << " connected" << endl;
     return connectedness;
+}
+
+void coordinateMageAttacks() {
+    if (!hasOvercharge || !state.typeCount[Mage]) {
+        return;
+    }
+    cout << "Coordinating mage attacks" << endl;
+    while (true) {
+        PathfindingMap canShootAtMap(w, h);
+        PathfindingMap shootMap(w, h);
+        PathfindingMap healerMap(w, h);
+        for (auto& unit : allUnits) {
+            if (!unit.get_location().is_on_map()) 
+                continue;
+            const auto& mapLocation = unit.get_location().get_map_location();
+            int x = mapLocation.get_x();
+            int y = mapLocation.get_y();
+            double multiplier = unit.get_team() == gc.get_team() ? -1 : 1;
+            canShootAtMap.weights[x][y] = 1;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    int nx = x+dx;
+                    int ny = y+dy;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                        continue;
+                    shootMap.weights[nx][ny] += multiplier;
+                }
+            }
+            if (unit.get_team() == gc.get_team() && unit.get_unit_type() == Healer && unit.get_ability_heat() < 10) {
+                healerMap.addInfluence(healerTargetInfluence, x, y);
+            }
+        }
+        PathfindingMap targetMap(w, h);
+        for (int x = 0; x < w; ++x) {
+            for (int y = 0; y < h; ++y) {
+                const MapLocation location(planet, x, y);
+                if (shootMap.weights[x][y] > 0 && canShootAtMap.weights[x][y] > 0) {
+                    targetMap.maxInfluenceMultiple(mageTargetInfluence, x, y, shootMap.weights[x][y]);
+                }
+            }
+        }
+        PathfindingMap distanceToMage(w, h);
+        vector<vector<int> > minHealerSum(w, vector<int>(h));
+        vector<vector<pair<int, int> > > distanceToMageParent(w, vector<pair<int, int>>(h, make_pair(-1, -1)));
+        distanceToMage += 1000;
+        queue<pair<int, int> > bfsQueue;
+        for (auto& unit : ourUnits) {
+            if (unit.get_unit_type() != Mage) {
+                continue;
+            }
+            if (!unit.get_location().is_on_map()) 
+                continue;
+            const auto& mapLocation = unit.get_location().get_map_location();
+            int x = mapLocation.get_x();
+            int y = mapLocation.get_y();
+            distanceToMage.weights[x][y] = 0;
+            minHealerSum[x][y] = healerMap.weights[x][y];
+            bfsQueue.push(make_pair(x, y));
+        }
+        while(!bfsQueue.empty()) {
+            auto cur = bfsQueue.front();
+            bfsQueue.pop();
+            int x = cur.first;
+            int y = cur.second;
+            if (minHealerSum[x][y] <= distanceToMage.weights[x][y]) {
+                continue;
+            }
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    int nx = x+dx;
+                    int ny = y+dy;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                        continue;
+                    if (passableMap.weights[nx][ny] > 1)
+                        continue;
+                    if (distanceToMage.weights[x][y]+1 < distanceToMage.weights[nx][ny]) {
+                        distanceToMage.weights[nx][ny] = distanceToMage.weights[x][y]+1;
+                        bfsQueue.push(make_pair(x, y));
+                        distanceToMageParent[nx][ny] = cur;
+                    }
+                    if (distanceToMage.weights[x][y]+1 == distanceToMage.weights[nx][ny]) {
+                        int healerSum = healerMap.weights[x][y] + distanceToMage.weights[nx][ny];
+                        minHealerSum[nx][ny] = max(minHealerSum[nx][ny], min(minHealerSum[x][y], healerSum));
+                    }
+                }
+            }
+        }
+        vector<pair<double, pair<int, int> > > bestTargets;
+        for (int x = 0; x < w; ++x) {
+            for (int y = 0; y < h; ++y) {
+                if (targetMap.weights[x][y] > 0 && healerMap.weights[x][y] > 0 && distanceToMage.weights[x][y] > 0 && distanceToMage.weights[x][y] < 1000) {
+                    double score = targetMap.weights[x][y] / (distanceToMage.weights[x][y]);
+                    bestTargets.emplace_back(score, make_pair(x, y));
+                }
+            }
+        }
+        if (!bestTargets.size()) {
+            break;
+        }
+        cout << "######################################################################" << endl;
+        cout << "Found " << bestTargets.size() << " viable targets" << endl;
+        sort(bestTargets.rbegin(), bestTargets.rend());
+        bool anyOvercharge = false;
+        for (auto& target : bestTargets) {
+            vector<pair<int, int> > path;
+            auto curNode = target.second;
+            while(curNode.first != -1) {
+                path.push_back(curNode);
+                curNode = distanceToMageParent[curNode.first][curNode.second];
+            }
+            reverse(path.begin(), path.end());
+            cout << "Found the following path:" << endl;
+            for (auto& node : path) {
+                cout << node.first << " " << node.second << endl;
+            }
+            MapLocation location(planet, path[0].first, path[0].second);
+            if (!gc.can_sense_location(location)) {
+                cout << "Error! Couldn't sense location!" << endl;
+                continue;
+            }
+            if (!gc.has_unit_at_location(location)) {
+                cout << "Error! Doesn't have unit at location!" << endl;
+                continue;
+            }
+            auto mage = gc.sense_unit_at_location(location);
+            auto& botUnit = unitMap[mage.get_id()];
+            for (size_t i = 0; i < path.size()-1; ++i) {
+                mage_attack(botUnit->unit);
+                if (botUnit->unit.get_health() <= 0) {
+                    cout << "Warning! The attacking mage died" << endl;
+                    break;
+                }
+                if (!botUnit->unit.get_location().is_on_map()) {
+                    cout << "Warning! Attacking mage entered a structure" << endl;
+                    break;
+                }
+                const auto& location = botUnit->unit.get_location().get_map_location();
+                if (botUnit->unit.get_movement_heat() >= 10) {
+                    auto nearbyUnits = gc.sense_nearby_units_by_team(location, 30, gc.get_team());
+                    double bestScore = -1;
+                    unsigned int bestUnitId = 0;
+                    for (const auto& unit : nearbyUnits) {
+                        if (unit.get_unit_type() == Healer && unit.get_ability_heat() < 10) {
+                            const auto& location = unit.get_location().get_map_location();
+                            double score = 1.0 / (enemyNearbyMap.weights[location.get_x()][location.get_y()] + 1.0);
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestUnitId = unit.get_id();
+                            }
+
+                        }
+                    }
+                    if (bestScore > 0) {
+                        cout << "Overcharging mage!" << endl;
+                        gc.overcharge(bestUnitId, botUnit->unit.get_id());
+                        invalidate_unit(botUnit->unit.get_id());
+                        invalidate_unit(bestUnitId);
+                        assert(botUnit->unit.get_attack_heat() == 0);
+                        assert(botUnit->unit.get_movement_heat() == 0);
+                        anyOvercharge = true;
+                    }
+                }
+                if (botUnit->unit.get_movement_heat() >= 10) {
+                    cout << "Warning! Attacking mage couldn't make it to target spot" << endl;
+                    break;
+                }
+                cout << "Overcharged mage moving from " << location.get_x() << " " << location.get_y() << " to " << path[i+1].first << " " << path[i+1].second << endl;
+                botUnit->moveToLocation(MapLocation(planet, path[i+1].first, path[i+1].second));
+                mage_attack(botUnit->unit);
+            }
+            if (anyOvercharge)
+                break;
+            mage_attack(botUnit->unit);
+        }
+        if (!anyOvercharge)
+            break;
+        invalidate_units();
+        findUnits();
+        createUnits();
+    }
 }
 
 #ifdef CUSTOM_BACKTRACE
@@ -1350,6 +1578,7 @@ int main() {
             bool anyTickDone = tickUnits(firstIteration, 1 << (int)Healer);
             firstIteration = false;
 
+            coordinateMageAttacks();
             anyTickDone |= tickUnits(firstIteration);
             if (hasOvercharge) doOvercharge();
             auto t3 = millis();
@@ -1359,7 +1588,7 @@ int main() {
 
             findUnits();
             executeMacroObjects();
-            auto t4 = millis();
+            // auto t4 = millis();
             // cout << "Execute: " << (t4 - t3) << endl;
         }
 

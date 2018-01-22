@@ -67,6 +67,15 @@ struct PathfindingMap {
         return (*this);
     }
 
+    PathfindingMap& operator+= (double other) {
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                weights[i][j] += other;
+            }
+        }
+        return (*this);
+    }
+
     PathfindingMap operator+ (const PathfindingMap& other) const {
         auto ret = (*this);
         return (ret += other);
@@ -176,7 +185,7 @@ struct PathfindingMap {
         weights[pos.get_x()][pos.get_y()] += influence;
     }
 
-    void addInfluence(vector<vector<double> > influence, int x0, int y0) {
+    void addInfluence(const vector<vector<double> >& influence, int x0, int y0) {
         int r = influence.size() / 2;
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {
@@ -189,7 +198,7 @@ struct PathfindingMap {
         }
     }
     
-    void addInfluenceMultiple(vector<vector<double> > influence, int x0, int y0, double factor) {
+    void addInfluenceMultiple(const vector<vector<double> >& influence, int x0, int y0, double factor) {
         int r = influence.size() / 2;
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {
@@ -202,7 +211,7 @@ struct PathfindingMap {
         }
     }
 
-    void maxInfluence(vector<vector<double> > influence, int x0, int y0) {
+    void maxInfluence(const vector<vector<double> >& influence, int x0, int y0) {
         int r = influence.size() / 2;
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {
@@ -215,7 +224,7 @@ struct PathfindingMap {
         }
     }
 
-    void maxInfluenceMultiple(vector<vector<double> > influence, int x0, int y0, double factor) {
+    void maxInfluenceMultiple(const vector<vector<double> >& influence, int x0, int y0, double factor) {
         int r = influence.size() / 2;
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {

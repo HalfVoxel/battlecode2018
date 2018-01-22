@@ -11,6 +11,7 @@ vector<vector<double> > rangerTargetInfluence;
 vector<vector<double> > enemyRangerTargetInfluence;
 vector<vector<double> > mageTargetInfluence;
 vector<vector<double> > healerTargetInfluence;
+vector<vector<double> > healerOverchargeInfluence;
 vector<vector<double> > knightTargetInfluence;
 vector<vector<double> > healerProximityInfluence;
 vector<vector<double> > healerInfluence;
@@ -81,7 +82,7 @@ void initInfluence() {
     
     healerTargetInfluence = calculate_uniform_disc_influence(30);
     mageTargetInfluence = calculate_uniform_disc_influence(30);
-    knightTargetInfluence = calculate_uniform_disc_influence(1);
+    knightTargetInfluence = calculate_uniform_disc_influence(2);
     
     r = 5;
     healerProximityInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
@@ -89,6 +90,17 @@ void initInfluence() {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
             healerProximityInfluence[dx+r][dy+r] = 1 / (1.0 + dis2);
+        }
+    }
+
+    r = 10;
+    healerOverchargeInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 > 80 && dis2 < 110) {
+                healerOverchargeInfluence[dx+r][dy+r] = 1;
+            }
         }
     }
     
