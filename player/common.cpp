@@ -5,6 +5,7 @@
 #include <cstring>
 #include <signal.h>
 #include <unistd.h>
+#include <ucontext.h>
 
 using namespace bc;
 
@@ -71,13 +72,13 @@ static void safe_write(const char* str, int fd = 1) {
     }
 }
 
-#ifdef CUSTOM_BACKTRACE
-
 static void addr2line(void* addr) {
     ostringstream oss;
     oss << "addr2line -afCpi -e main " << addr;
     ignore = system(oss.str().c_str());
 }
+
+#ifdef CUSTOM_BACKTRACE
 
 #include "stackwalk.h"
 
@@ -95,12 +96,10 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     signal(sig, SIG_DFL);
     safe_write("\n\n!!! caught signal: ");
     safe_write(strsignal(sig));
-#ifdef CUSTOM_BACKTRACE
     safe_write("\non line:\n");
     ucontext_t *context = (ucontext_t *)arg;
     addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
     print_trace();
-#endif
     safe_write("flushing stdio\n");
     fflush(stdout);
     fflush(stderr);
