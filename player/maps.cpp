@@ -15,6 +15,8 @@ PathfindingMap enemyPositionMap;
 PathfindingMap nearbyFriendMap;
 PathfindingMap rocketHazardMap;
 PathfindingMap rocketAttractionMap;
+PathfindingMap rocketProximityMap;
 PathfindingMap healerOverchargeMap;
+PathfindingMap stuckUnitMap;
 
 map<MapReuseObject, PathfindingMap> reusableMaps;

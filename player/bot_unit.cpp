@@ -53,6 +53,9 @@ void addRocketTarget(const Unit& unit, PathfindingMap& targetMap) {
     }
     else {
         for (auto rocketId : unitShouldGoToRocket[unit.get_id()]) {
+            if (!gc.has_unit(rocketId)) {
+                continue;
+            }
             auto unit = gc.get_unit(rocketId);
             if(!unit.get_location().is_on_map()) {
                 continue;
@@ -337,6 +340,9 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                 targetMap.weights[pos.get_x()][pos.get_y()] = 0;
             }
         }
+
+        targetMap /= stuckUnitMap + 1.0;
+
         reusableMaps[reuseObject] = targetMap;
     }
     
