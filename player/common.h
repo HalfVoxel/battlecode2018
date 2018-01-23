@@ -37,6 +37,7 @@ extern bc::Planet planet;
 extern const bc::PlanetMap* planetMap;
 extern int w;
 extern int h;
+extern int turnsSinceLastFight;
 
 extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
 

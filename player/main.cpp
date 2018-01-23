@@ -27,6 +27,7 @@ bool hasBlink;
 double bestMacroObjectScore;
 bool existsPathToEnemy;
 int lastFactoryBlueprintTurn = -1;
+int turnsSinceLastFight;
 
 // True if mars has any landing spots (i.e does mars have any traversable ground)
 bool anyReasonableLandingSpotOnInitialMars;
@@ -300,7 +301,7 @@ struct BotWorker : BotUnit {
                         if (mapConnectedness <= 2) {
                             factor += 0.1;
                         }
-                        if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 70 && averageAttackerSuccessRate < 0.05)) {
+                        if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 70 && averageAttackerSuccessRate < 0.02)) {
                             factor += 0.1;
                         }
                         double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
@@ -818,7 +819,7 @@ struct Researcher {
                 if (state.typeCount[Ranger] > 100) {
                     scores[Rocket] += 200;
                 }
-                if (gc.get_round() > 55 && averageAttackerSuccessRate < 0.001) {
+                if (gc.get_round() > 55 && (averageAttackerSuccessRate < 0.001 || turnsSinceLastFight > 20)) {
                     scores[Rocket] += 200;
                 }
                 if (!existsPathToEnemy) {
@@ -1798,6 +1799,8 @@ int main() {
     costMapComputationTime = 0;
     attackComputationTime = 0;
     pathfindingTime = 0;
+
+    turnsSinceLastFight = 0;
     // loop through the whole game.
     while (true) {
         time_t t0 = millis();
@@ -1805,6 +1808,7 @@ int main() {
         printf("Round: %d\n", round);
         printf("Time remaining: %d\n", gc.get_time_left_ms());
 
+        ++turnsSinceLastFight;
         updateResearchStatus();
         findUnits();
 

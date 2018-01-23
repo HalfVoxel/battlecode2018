@@ -251,6 +251,7 @@ void mage_attack(const Unit& unit) {
         gc.attack(unit.get_id(), best_unit->get_id());
         invalidate_units();
         cout << "Mage attack with score " << best_unit_score << endl;
+        turnsSinceLastFight = 0;
     }
 }
 
@@ -316,6 +317,7 @@ void attack_all_in_range(const Unit& unit) {
         //Attacking 'em enemies
         gc.attack(id, best_unit->get_id());
         invalidate_unit(id);
+        turnsSinceLastFight = 0;
     }
 
     averageAttackerSuccessRate = averageAttackerSuccessRate * interpolationFactor + attackSuccessful * (1-interpolationFactor);
