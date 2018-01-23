@@ -26,6 +26,7 @@ bool hasOvercharge;
 bool hasBlink;
 double bestMacroObjectScore;
 bool existsPathToEnemy;
+int lastFactoryBlueprintTurn = -1;
 
 // True if mars has any landing spots (i.e does mars have any traversable ground)
 bool anyReasonableLandingSpotOnInitialMars;
@@ -87,6 +88,50 @@ struct MacroObject {
 
 vector<MacroObject> macroObjects;
 
+// Returns score for factory placement
+// Will be on the order of magnitude of 1 for a well placed factory
+// May be negative, but mostly in the [0,1] range
+double factoryPlacementScore(int x, int y) {
+    double nearbyTileScore = 0;
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+            if (dx == 0 && dy == 0) continue;
+            if (x + dx < 0 || x + dx >= w || y + dy <= 0 || y + dy >= h) continue;
+
+            if (!isinf(passableMap.weights[x+dx][y+dy])) {
+                // Traversable
+                // structureProximityMap is typically 0.4 on the 8 tiles around a factory
+                nearbyTileScore += 0.4 / (0.4 + structureProximityMap.weights[x+dx][y+dy]);
+            }
+        }
+    }
+    nearbyTileScore /= 8.0f;
+    assert(nearbyTileScore <= 1.01f);
+    assert(nearbyTileScore >= 0);
+
+    auto pos = MapLocation(Earth, x, y);
+    auto factories = gc.sense_nearby_units_by_type(pos, 4*4, Factory);
+
+    // Number of factories at a distance in the range (sqrt(2), 4]
+    double nearbyFactories = 0;
+    for (auto& f : factories) {
+        if (f.get_team() == ourTeam && f.get_map_location().distance_squared_to(pos) > 2) nearbyFactories++;
+    }
+
+    // nearbyTileScore will be approximately 1 if there are 8 free tiles around the factory.
+
+    double score = nearbyTileScore;
+    // Score will go to zero when there is more than 50 karbonite on the tile
+    score -= karboniteMap.weights[x][y] / 50.0;
+
+    // We like building factories in clusters (with some spacing)
+    //if (nearbyFactories > 1) score *= 1.2f;
+    //else if (nearbyFactories > 0) score *= 1.1f;
+
+    // enemyNearbyMap is 1 at enemies and falls of slowly
+    // score -= enemyNearbyMap.weights[x][y];
+    return score;
+}
 
 struct BotWorker : BotUnit {
     int rocketDelay = 0;
@@ -148,18 +193,18 @@ struct BotWorker : BotUnit {
         }
 
         hasDoneTick = true;
-        
+
         auto unitMapLocation = unit.get_location().get_map_location();
 
         if (gc.is_move_ready(unit.get_id())) {
             unitMapLocation = getNextLocation();
             moveToLocation(unitMapLocation);
         }
-        
+
         if (!unit.get_location().is_on_map()) {
             return;
         }
-        
+
         unitMapLocation = unit.get_location().get_map_location();
 
         const auto nearby = gc.sense_nearby_units(unitMapLocation, 2);
@@ -229,12 +274,13 @@ struct BotWorker : BotUnit {
                     double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
                     if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 400 > state.remainingKarboniteOnEarth)
                         score = 0;
-                    score -= karboniteMap.weights[x][y] * 0.001;
-                    score -= structureProximityMap.weights[x][y] * 0.001;
-                    score -= enemyNearbyMap.weights[x][y] * 0.001;
+
+                    score *= factoryPlacementScore(x, y);
+
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
-                        if(gc.can_blueprint(id, Factory, d)){
+                        if (lastFactoryBlueprintTurn != gc.get_round() && gc.can_blueprint(id, Factory, d)) {
                             gc.blueprint(id, Factory, d);
+                            lastFactoryBlueprintTurn = gc.get_round();
                         }
                     });
                     auto researchInfo = gc.get_research_info();
@@ -729,13 +775,13 @@ struct Researcher {
                 break;
         }
         switch(researchInfo.get_level(Healer)) {
-            case 0: 
+            case 0:
                 scores[Healer] = 9 + 2.0 * state.typeCount[Healer];
                 break;
-            case 1: 
+            case 1:
                 scores[Healer] = 8 + 1.0 * state.typeCount[Healer];
                 break;
-            case 2: 
+            case 2:
                 scores[Healer] = 4 + 1.0 * state.typeCount[Healer];
                 break;
         }
@@ -1361,7 +1407,7 @@ void coordinateMageAttacks() {
         PathfindingMap shootMap(w, h);
         PathfindingMap healerMap(w, h);
         for (auto& unit : allUnits) {
-            if (!unit.get_location().is_on_map()) 
+            if (!unit.get_location().is_on_map())
                 continue;
             const auto& mapLocation = unit.get_location().get_map_location();
             int x = mapLocation.get_x();
@@ -1399,7 +1445,7 @@ void coordinateMageAttacks() {
             if (unit.get_unit_type() != Mage) {
                 continue;
             }
-            if (!unit.get_location().is_on_map()) 
+            if (!unit.get_location().is_on_map())
                 continue;
             const auto& mapLocation = unit.get_location().get_map_location();
             int x = mapLocation.get_x();
@@ -1675,7 +1721,7 @@ int main() {
         updateMageNearbyMap();
         updateStructureProximityMap();
         updateDamagedStructuresMap();
-        
+
         if (planet == Mars) {
             updateRocketHazardMap();
         }
