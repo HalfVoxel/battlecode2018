@@ -9,7 +9,7 @@ double averageAttackerSuccessRate;
 
 // Relative values of different unit types when at "low" (not full) health
 float unit_defensive_strategic_value[] = {
-    1, // Worker
+    0.5, // Worker
     2, // Knight
     3, // Ranger
     6, // Mage
@@ -20,7 +20,7 @@ float unit_defensive_strategic_value[] = {
 
 // Relative values of different unit types when at full or almost full health
 float unit_strategic_value[] = {
-    1, // Worker
+    0.5, // Worker
     2, // Knight
     3, // Ranger
     6, // Mage
@@ -288,6 +288,7 @@ void attack_all_in_range(const Unit& unit) {
 
         float fractional_health = place.get_health() / (float)place.get_max_health();
         float value = values[place.get_unit_type()] / fractional_health;
+        value *= value;
         value *= value;
 
         // Reservoir sampling
