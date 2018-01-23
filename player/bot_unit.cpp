@@ -261,6 +261,8 @@ void attack_all_in_range(const Unit& unit) {
 
     if (!unit.get_location().is_on_map()) return;
 
+    if (lowTimeRemaining && (rand() % 2) == 0) return;
+
     int attackRange = unit.get_attack_range();
     const auto locus = unit.get_location().get_map_location();
     int x = locus.get_x();

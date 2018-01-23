@@ -33,6 +33,7 @@ Planet planet;
 const PlanetMap* planetMap;
 int w;
 int h;
+bool lowTimeRemaining = false;
 
 map<unsigned, vector<unsigned> > unitShouldGoToRocket;
 
