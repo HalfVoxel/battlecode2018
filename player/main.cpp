@@ -1452,10 +1452,20 @@ void coordinateMageAttacks() {
             int y = mapLocation.get_y();
             distanceToMage.weights[x][y] = 0;
             if (unit.get_movement_heat() < 10) {
-                distanceToMage.weights[x][y]--;
-                bfsQueue.push(make_pair(x, y));
+                distanceToMage.weights[x][y] -= 1;
+                if (hasBlink && unit.get_ability_heat() < 10) {
+                    distanceToMage.weights[x][y] -= 1;
+                    bfsQueue.push(make_pair(x, y));
+                }
             }
             minHealerSum[x][y] = healerMap.weights[x][y];
+        }
+        for (int x = 0; x < w; ++x) {
+            for (int y = 0; y < h; ++y) {
+                if (distanceToMage.weights[x][y] == -1) {
+                    bfsQueue.push(make_pair(x, y));
+                }
+            }
         }
         for (int x = 0; x < w; ++x) {
             for (int y = 0; y < h; ++y) {
@@ -1469,9 +1479,13 @@ void coordinateMageAttacks() {
             bfsQueue.pop();
             int x = cur.first;
             int y = cur.second;
-            if (minHealerSum[x][y] <= distanceToMage.weights[x][y]) {
+            int d = distanceToMage.weights[x][y];
+            if (2 * minHealerSum[x][y] <= d) {
                 continue;
             }
+            int D = d+1;
+            if (D%2 == 1)
+                ++D;
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     int nx = x+dx;
@@ -1480,16 +1494,43 @@ void coordinateMageAttacks() {
                         continue;
                     if (passableMap.weights[nx][ny] > 1)
                         continue;
-                    if (distanceToMage.weights[x][y]+1 < distanceToMage.weights[nx][ny]) {
-                        distanceToMage.weights[nx][ny] = distanceToMage.weights[x][y]+1;
+                    if (D < distanceToMage.weights[nx][ny]) {
+                        distanceToMage.weights[nx][ny] = D;
                         bfsQueue.push(make_pair(nx, ny));
                         distanceToMageParent[nx][ny] = cur;
+                        minHealerSum[nx][ny] = -1;
                     }
-                    if (distanceToMage.weights[x][y]+1 == distanceToMage.weights[nx][ny]) {
-                        int healerSum = min(minHealerSum[x][y], (int)(healerMap.weights[nx][ny] + distanceToMage.weights[nx][ny]));
+                    if (D == distanceToMage.weights[nx][ny]) {
+                        int healerSum = min(minHealerSum[x][y], (int)(healerMap.weights[nx][ny] + (distanceToMage.weights[nx][ny])/2));
                         if (healerSum > minHealerSum[nx][ny]) {
                             minHealerSum[nx][ny] = healerSum;
                             distanceToMageParent[nx][ny] = cur;
+                        }
+                    }
+                }
+            }
+            if (d%2 == 0 && hasBlink) {
+                D = d+1;
+                for (int dx = -2; dx <= 2; dx++) {
+                    for (int dy = -2; dy <= 2; dy++) {
+                        int nx = x+dx;
+                        int ny = y+dy;
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                            continue;
+                        if (passableMap.weights[nx][ny] > 1)
+                            continue;
+                        if (D < distanceToMage.weights[nx][ny]) {
+                            distanceToMage.weights[nx][ny] = D;
+                            bfsQueue.push(make_pair(nx, ny));
+                            distanceToMageParent[nx][ny] = cur;
+                            minHealerSum[nx][ny] = -1;
+                        }
+                        if (D == distanceToMage.weights[nx][ny]) {
+                            int healerSum = min(minHealerSum[x][y], (int)(healerMap.weights[nx][ny] + (distanceToMage.weights[nx][ny]+1)/2));
+                            if (healerSum > minHealerSum[nx][ny]) {
+                                minHealerSum[nx][ny] = healerSum;
+                                distanceToMageParent[nx][ny] = cur;
+                            }
                         }
                     }
                 }
@@ -1546,7 +1587,8 @@ void coordinateMageAttacks() {
                     cout << "Warning! Attacking mage entered a structure" << endl;
                     break;
                 }
-                const auto& location = botUnit->unit.get_location().get_map_location();
+                auto location = botUnit->unit.get_location().get_map_location();
+                bool hasDoneAnything = false;
                 if (botUnit->unit.get_movement_heat() >= 10) {
                     auto nearbyUnits = gc.sense_nearby_units_by_team(location, 30, gc.get_team());
                     double bestScore = -1;
@@ -1582,28 +1624,48 @@ void coordinateMageAttacks() {
                         gc.overcharge(bestUnitId, botUnit->unit.get_id());
                         invalidate_unit(botUnit->unit.get_id());
                         invalidate_unit(bestUnitId);
-                        assert(botUnit->unit.get_attack_heat() == 0);
-                        assert(botUnit->unit.get_movement_heat() == 0);
+                        //assert(botUnit->unit.get_attack_heat() == 0);
+                        //assert(botUnit->unit.get_movement_heat() == 0);
                         anyOvercharge = true;
+                        hasDoneAnything = true;
                     }
                 }
                 if (botUnit->unit.get_movement_heat() >= 10) {
                     cout << "Warning! Attacking mage couldn't make it to target spot" << endl;
-                    assert(0);
+                    //assert(0);
                     break;
                 }
-                cout << "Overcharged mage moving from " << location.get_x() << " " << location.get_y() << " to " << path[i+1].first << " " << path[i+1].second << endl;
-                botUnit->moveToLocation(MapLocation(planet, path[i+1].first, path[i+1].second));
-                mage_attack(botUnit->unit);
-                if (hasBlink && botUnit->unit.get_ability_heat() < 10 && i < path.size()-2) {
-                    int j = min(i+3, path.size()-1);
+                if (hasBlink && botUnit->unit.get_ability_heat() < 10) {
+                    int j = min(i+1, path.size()-1);
+                    cout << "Should blink to " << path[j].first << " " << path[j].second << endl;
                     const MapLocation blinkTo(planet, path[j].first, path[j].second);
                     if (gc.can_begin_blink(botUnit->unit.get_id(), blinkTo)) {
                         cout << "Blinking to " << path[j].first << " " << path[j].second << endl;
+                        passableMap.weights[location.get_x()][location.get_y()] = 1;
                         gc.blink(botUnit->unit.get_id(), blinkTo);
                         invalidate_unit(botUnit->unit.get_id());
                         mage_attack(botUnit->unit);
-                        i = j - 1;
+                        i = j;
+                        anyOvercharge = true;
+                        location = blinkTo;
+                        hasDoneAnything = true;
+                        passableMap.weights[location.get_x()][location.get_y()] = 1000;
+                    }
+                }
+                if (i < path.size()-1) {
+                    cout << "Overcharged mage moving from " << location.get_x() << " " << location.get_y() << " to " << path[i+1].first << " " << path[i+1].second << endl;
+                    botUnit->moveToLocation(MapLocation(planet, path[i+1].first, path[i+1].second));
+                    mage_attack(botUnit->unit);
+                    location = botUnit->unit.get_location().get_map_location();
+                    if (location.get_x() == path[i].first && location.get_y() == path[i].second) {
+                        if (!hasDoneAnything) {
+                            cout << "Warning! Attacking mage couldn't make it to target spot" << endl;
+                            //assert(0);
+                            break;
+                        }
+                        --i;
+                    }
+                    else {
                         anyOvercharge = true;
                     }
                 }
