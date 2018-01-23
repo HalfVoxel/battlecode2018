@@ -1806,7 +1806,13 @@ int main() {
         time_t t0 = millis();
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
-        printf("Time remaining: %d\n", gc.get_time_left_ms());
+        int timeLeft = gc.get_time_left_ms();
+        // If less than 0.5 seconds left, then enter low power mode
+        lowTimeRemaining = timeLeft < 500;
+        if (lowTimeRemaining) {
+            printf("LOW TIME REMAINING\n");
+        }
+        printf("Time remaining: %d\n", timeLeft);
 
         ++turnsSinceLastFight;
         updateResearchStatus();
@@ -1833,7 +1839,7 @@ int main() {
             updateRocketAttractionMap();
         }
 
-        analyzeEnemyPositions();
+        if (!lowTimeRemaining) analyzeEnemyPositions();
 
         unitShouldGoToRocket.clear();
 
@@ -1888,28 +1894,32 @@ int main() {
         cout << "All iterations: " << std::round(t5 - t1) << endl;
         updateResearch();
 
-        auto t6 = millis();
-        cout << "Research: " << (t6 - t5) << endl;
-
-        cout << "Map computation time: " << std::round(mapComputationTime) << endl;
-        cout << "   Target map computation time: " << std::round(targetMapComputationTime) << endl;
-        cout << "   Cost map computation time: " << std::round(costMapComputationTime) << endl;
-        cout << "Pathfinding time: " << std::round(pathfindingTime) << endl;
-        cout << "Attack computation time: " << std::round(attackComputationTime) << endl;
-        cout << "Mage coordination time: " << std::round(mageCoordinationTime) << endl;
-        cout << "Invalidation time: " << std::round(unitInvalidationTime) << endl;
-        cout << "Preprocessing time: " << std::round(preprocessingComputationTime) << endl;
-        for (auto it : timeUsed) {
-            cout << unitTypeToString[it.first] << ": " << std::round(it.second) << endl;
-        }
-
         double turnTime = millis() - t0;
-        cout << "Turn time: " << turnTime << endl;
         totalTurnTime += turnTime;
-        cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
-        cout << "Total: " << std::round(totalTurnTime) << endl;
-        cout << "Attacker success rate: " << averageAttackerSuccessRate << endl;
-        cout << "Average healer success rate: " << averageHealerSuccessRate << endl;
+
+        if (!lowTimeRemaining) {
+            auto t6 = millis();
+            cout << "Research: " << (t6 - t5) << endl;
+
+            cout << "Map computation time: " << std::round(mapComputationTime) << endl;
+            cout << "   Target map computation time: " << std::round(targetMapComputationTime) << endl;
+            cout << "   Cost map computation time: " << std::round(costMapComputationTime) << endl;
+            cout << "Pathfinding time: " << std::round(pathfindingTime) << endl;
+            cout << "Attack computation time: " << std::round(attackComputationTime) << endl;
+            cout << "Mage coordination time: " << std::round(mageCoordinationTime) << endl;
+            cout << "Invalidation time: " << std::round(unitInvalidationTime) << endl;
+            cout << "Preprocessing time: " << std::round(preprocessingComputationTime) << endl;
+            for (auto it : timeUsed) {
+                cout << unitTypeToString[it.first] << ": " << std::round(it.second) << endl;
+            }
+
+            cout << "Turn time: " << turnTime << endl;
+            
+            cout << "Average: " << std::round(totalTurnTime/gc.get_round()) << endl;
+            cout << "Total: " << std::round(totalTurnTime) << endl;
+            cout << "Attacker success rate: " << averageAttackerSuccessRate << endl;
+            cout << "Average healer success rate: " << averageHealerSuccessRate << endl;
+        }
 
         gc.write_team_array(0, state.totalUnitCount);
 

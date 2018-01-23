@@ -38,6 +38,7 @@ extern const bc::PlanetMap* planetMap;
 extern int w;
 extern int h;
 extern int turnsSinceLastFight;
+extern bool lowTimeRemaining;
 
 extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
 
