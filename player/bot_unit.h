@@ -35,7 +35,7 @@ struct BotUnit {
 void addRocketTarget(const Unit& unit, PathfindingMap& targetMap);
 
 // Relative values of different unit types when at "low" (not full) health
-extern float unit_defensive_strategic_value[];
+extern const float unit_defensive_strategic_value[];
 
 // Relative values of different unit types when at full or almost full health
-extern float unit_strategic_value[];
+extern const float unit_strategic_value[];

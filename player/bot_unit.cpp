@@ -8,30 +8,30 @@ using namespace std;
 double averageAttackerSuccessRate;
 
 // Relative values of different unit types when at "low" (not full) health
-float unit_defensive_strategic_value[] = {
-    0.5, // Worker
-    2, // Knight
+const float unit_defensive_strategic_value[] = {
+    1, // Worker
+    3, // Knight
     3, // Ranger
-    6, // Mage
+    7, // Mage
     5, // Healer
-    4, // Factory
+    3, // Factory
     4, // Rocket
 };
 
 // Relative values of different unit types when at full or almost full health
-float unit_strategic_value[] = {
-    0.5, // Worker
-    2, // Knight
+const float unit_strategic_value[] = {
+    1, // Worker
+    3, // Knight
     3, // Ranger
-    6, // Mage
+    7, // Mage
     5, // Healer
-    4, // Factory
+    3, // Factory
     4, // Rocket
 };
 
 // Relative values of different unit types when at Mars
-float unit_martian_strategic_value[] = {
-    2, // Worker
+const float unit_martian_strategic_value[] = {
+    1.5, // Worker
     3, // Knight
     4, // Ranger
     6, // Mage
@@ -217,7 +217,6 @@ void mage_attack(const Unit& unit) {
 
     for (auto& place : nearby) {
         if (place.get_health() <= 0) continue;
-        if (!gc.can_attack(unit.get_id(), place.get_id())) continue;
 
         float fractional_health = place.get_health() / (float)place.get_max_health();
         float value = values[place.get_unit_type()] / (fractional_health + 2.0);
@@ -281,13 +280,26 @@ void attack_all_in_range(const Unit& unit) {
     auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
     auto& values = low_health ? unit_defensive_strategic_value : unit_strategic_value;
 
+    int nearbyFriendly = 0;
+    for (auto& place : nearby) {
+        if (place.get_team() == unit.get_team())
+            nearbyFriendly++;
+    }
+
     for (auto& place : nearby) {
         if (place.get_health() <= 0) continue;
         if (!gc.can_attack(id, place.get_id())) continue;
         if (place.get_team() == unit.get_team()) continue;
 
         float fractional_health = place.get_health() / (float)place.get_max_health();
-        float value = values[place.get_unit_type()] / fractional_health;
+        if (place.is_robot())
+            fractional_health *= fractional_health;
+        float value = values[place.get_unit_type()];
+        if (nearbyFriendly <= 2 && place.get_unit_type() == Mage)
+            value -= 2;
+        if (unit.get_unit_type() == Mage && place.get_unit_type() == Knight)
+            value += 1;
+        value /= fractional_health;
         value *= value;
         value *= value;
 
