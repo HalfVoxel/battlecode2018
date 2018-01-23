@@ -20,6 +20,7 @@ parser.add_argument("--map", help="Map to use")
 parser.add_argument("--threads", help="Number of threads to use", type=int, default=2)
 parser.add_argument("--max-epochs", help="Number of times to iterate through all maps", type=int, default=4)
 parser.add_argument("--max-maps", help="Max number of maps, if lower than the total number a random subset will be chosen", type=int, default=1000000)
+parser.add_argument("--no-color", help="Disable color", action="store_true")
 parser.add_argument("--dnaA", help="Genetic information for Team A", nargs="*")
 parser.add_argument("--dnaB", help="Genetic information for Team B", nargs="*")
 args = parser.parse_args()
@@ -52,6 +53,15 @@ yellowStr = colorFormat.format(yellow)
 grayStr = colorFormat.format(gray)
 reset = "\033[0m"
 clearScreen = "\033[2J"
+
+if args.no_color:
+    redStr = ""
+    greenStr = ""
+    yellowStr =""
+    grayStr = ""
+    reset = ""
+    clearScreen = ""
+
 active_commands = []
 
 sys.stdout.flush()
