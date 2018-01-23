@@ -4,6 +4,9 @@
 #include <sstream>
 #include <cstring>
 #include <signal.h>
+#ifdef __APPLE__
+#define _XOPEN_SOURCE
+#endif
 #include <unistd.h>
 #include <ucontext.h>
 
@@ -72,11 +75,13 @@ static void safe_write(const char* str, int fd = 1) {
     }
 }
 
+#ifndef __APPLE__
 static void addr2line(void* addr) {
     ostringstream oss;
     oss << "addr2line -afCpi -e main " << addr;
     ignore = system(oss.str().c_str());
 }
+#endif
 
 #ifdef CUSTOM_BACKTRACE
 
@@ -97,8 +102,10 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     safe_write("\n\n!!! caught signal: ");
     safe_write(strsignal(sig));
     safe_write("\non line:\n");
+#ifndef __APPLE__
     ucontext_t *context = (ucontext_t *)arg;
     addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
+#endif
     print_trace();
     safe_write("flushing stdio\n");
     fflush(stdout);
