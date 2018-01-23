@@ -156,11 +156,6 @@ void BotRocket::tick() {
                     gc.launch_rocket(unit.get_id(), landingSpot);
                     invalidate_units();
                     launchedWorkerCount += workerCount;
-                    if (countRocketsSent < 20) {
-                        gc.write_team_array(1, ++countRocketsSent);
-                        gc.write_team_array(2 * countRocketsSent, landingSpot.get_x());
-                        gc.write_team_array(2 * countRocketsSent + 1, landingSpot.get_y());
-                    }
                 }
             }
         }

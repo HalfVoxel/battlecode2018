@@ -1249,12 +1249,24 @@ void updateStuckUnitMap() {
 
 void updateRocketHazardMap() {
     rocketHazardMap = PathfindingMap(w, h);
-    const auto& teamArray = gc.get_team_array(Earth);
-    int rocketCount = teamArray[1];
-    for (int i = 0; i < rocketCount; i++) {
-        int x = teamArray[2*i+2];
-        int y = teamArray[2*i+3];
-        rocketHazardMap.weights[x][y] = 1;
+    auto rocketLandingInfo = gc.get_rocket_landings();
+    for (unsigned int round = gc.get_round(); round < gc.get_round() + 10; ++round) {
+        const auto rocketLandings = rocketLandingInfo.get_landings_on_round(round);
+        for (const auto& landing : rocketLandings) {
+            const auto& destination = landing.get_destination();
+            int x = destination.get_x();
+            int y = destination.get_y();
+            for (int dx = -1; dx <= 1; ++dx) {
+                for (int dy = -1; dy <= 1; ++dy) {
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                        continue;
+                    rocketHazardMap.weights[nx][ny] += 0.5;
+                }
+            }
+            rocketHazardMap.weights[x][y] += 1;
+        }
     }
 }
 
