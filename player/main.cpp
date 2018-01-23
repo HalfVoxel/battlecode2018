@@ -258,7 +258,7 @@ struct BotWorker : BotUnit {
         }
 
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
-        double replicateScore = karbonitePerWorker * 0.008 + 2.5 / state.typeCount[Worker];
+        double replicateScore = karbonitePerWorker * 0.015 + 2.5 / state.typeCount[Worker];
         if (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth) {
             replicateScore = -1;
         }
@@ -278,7 +278,7 @@ struct BotWorker : BotUnit {
                     score *= factoryPlacementScore(x, y);
 
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
-                        if (lastFactoryBlueprintTurn != gc.get_round() && gc.can_blueprint(id, Factory, d)) {
+                        if (lastFactoryBlueprintTurn != (int)gc.get_round() && gc.can_blueprint(id, Factory, d)) {
                             gc.blueprint(id, Factory, d);
                             lastFactoryBlueprintTurn = gc.get_round();
                         }
@@ -603,6 +603,13 @@ struct BotFactory : BotUnit {
         if (!unit.is_factory_producing()) {
             {
                 double score = 1;
+                const auto& location = unit.get_location().get_map_location();
+                double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
+                if (nearbyEnemiesWeight > 0.8)
+                    score += 5;
+                if (nearbyEnemiesWeight > 0.9)
+                    score += 5;
+                score /= state.typeCount[Knight] + 1.0;
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
                     if (gc.can_produce_robot(id, Knight)) {
                         gc.produce_robot(id, Knight);
@@ -991,6 +998,7 @@ void updateKarboniteMap() {
             }
         }
     }
+    fuzzyKarboniteMap /= ourStartingPositionMap;
 }
 
 void updateEnemyInfluenceMaps(){
@@ -1018,14 +1026,35 @@ void updateEnemyInfluenceMaps(){
     }
 
     auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
-    for (auto& enemy : initial_units) {
-        if (enemy.get_team() == enemyTeam && enemy.get_location().is_on_map()) {
-            auto pos = enemy.get_location().get_map_location();
+    for (auto& unit : initial_units) {
+        if (!unit.get_location().is_on_map())
+            continue;
+        if (unit.get_team() == enemyTeam) {
+            auto pos = unit.get_location().get_map_location();
             for (int x = 0; x < w; ++x) {
                 for (int y = 0; y < h; ++y) {
                     int dx = pos.get_x() - x;
                     int dy = pos.get_y() - y;
                     enemyNearbyMap.weights[x][y] += 0.01 / (dx * dx + dy * dy + 5);
+                }
+            }
+        }
+    }
+}
+
+void computeOurStartingPositionMap() {
+    ourStartingPositionMap = PathfindingMap(w, h);
+    auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
+    for (auto& unit : initial_units) {
+        if (!unit.get_location().is_on_map())
+            continue;
+        if (unit.get_team() == ourTeam) {
+            auto pos = unit.get_location().get_map_location();
+            for (int x = 0; x < w; ++x) {
+                for (int y = 0; y < h; ++y) {
+                    int dx = pos.get_x() - x;
+                    int dy = pos.get_y() - y;
+                    ourStartingPositionMap.weights[x][y] = max(ourStartingPositionMap.weights[x][y], 200.0 / (dx * dx + dy * dy + 200.0));
                 }
             }
         }
@@ -1727,6 +1756,7 @@ int main() {
         rocketHazardMap = PathfindingMap(w, h);
     }
 
+    computeOurStartingPositionMap();
     updatePassableMap();
     if (planet == Earth) {
         mapConnectedness = computeConnectedness();
@@ -1824,19 +1854,20 @@ int main() {
         while (true) {
             auto t2 = millis();
             createUnits();
+            cout << "We have " << ourUnits.size() << " units" << endl;
             coordinateMageAttacks();
             bool anyTickDone = tickUnits(firstIteration, 1 << (int)Healer);
             firstIteration = false;
 
-            anyTickDone |= tickUnits(firstIteration);
+            anyTickDone |= tickUnits(false);
             if (hasOvercharge) doOvercharge();
             auto t3 = millis();
             cout << "Iteration: " << (t3 - t2) << endl;
 
             if (!anyTickDone) break;
 
-            findUnits();
             executeMacroObjects();
+            findUnits();
             // auto t4 = millis();
             // cout << "Execute: " << (t4 - t3) << endl;
         }

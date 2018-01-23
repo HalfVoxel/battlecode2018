@@ -21,5 +21,6 @@ PathfindingMap healerOverchargeMap;
 PathfindingMap stuckUnitMap;
 PathfindingMap mageNearbyMap;
 PathfindingMap mageNearbyFuzzyMap;
+PathfindingMap ourStartingPositionMap;
 
 map<MapReuseObject, PathfindingMap> reusableMaps;
