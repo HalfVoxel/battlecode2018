@@ -346,7 +346,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
             }
         }
 
-        if (isHurt) {
+        if (isHurt || unit.get_unit_type() == Mage) {
             for (auto& u : ourUnits) {
                 if (u.get_unit_type() == Healer) {
                     if (!u.get_location().is_on_map()) {
@@ -355,17 +355,9 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     auto pos = u.get_location().get_map_location();
                     double factor = 10;
                     if (unit.get_unit_type() == Mage || unit.get_unit_type() == Knight) {
-                        factor = 0.1;
+                        factor = 0.4;
                     }
                     targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), factor);
-                }
-
-                if (u.get_unit_type() == Factory) {
-                    if (!u.get_location().is_on_map()) {
-                        continue;
-                    }
-                    auto pos = u.get_location().get_map_location();
-                    targetMap.weights[pos.get_x()][pos.get_y()] += 0.1;
                 }
             }
         }
@@ -378,6 +370,10 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         }
 
         targetMap /= stuckUnitMap + 1.0;
+        
+        if (unit.get_unit_type() == Mage) {
+            targetMap /= mageNearbyFuzzyMap + 0.1;
+        }
 
         reusableMaps[reuseObject] = targetMap;
     }

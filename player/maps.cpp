@@ -20,5 +20,6 @@ PathfindingMap rocketProximityMap;
 PathfindingMap healerOverchargeMap;
 PathfindingMap stuckUnitMap;
 PathfindingMap mageNearbyMap;
+PathfindingMap mageNearbyFuzzyMap;
 
 map<MapReuseObject, PathfindingMap> reusableMaps;
