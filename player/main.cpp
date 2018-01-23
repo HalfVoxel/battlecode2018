@@ -769,17 +769,17 @@ struct Researcher {
         }
         switch(researchInfo.get_level(Ranger)) {
             case 0:
-                scores[Ranger] = 5 + 0.05 * state.typeCount[Ranger];
+                scores[Ranger] = 4 + 0.05 * state.typeCount[Ranger];
                 if (hasOvercharge)
                     scores[Ranger] += 1;
                 break;
             case 1:
-                scores[Ranger] = 5 + 0.01 * state.typeCount[Ranger];
+                scores[Ranger] = 1 + 0.01 * state.typeCount[Ranger];
                 if (hasOvercharge)
                     scores[Ranger] += 3;
                 break;
             case 2:
-                scores[Ranger] = 3 + 0.01 * state.typeCount[Ranger];
+                scores[Ranger] = 0.5 + 0.01 * state.typeCount[Ranger];
                 break;
         }
         switch(researchInfo.get_level(Healer)) {
@@ -790,7 +790,7 @@ struct Researcher {
                 scores[Healer] = 8 + 1.0 * state.typeCount[Healer];
                 break;
             case 2:
-                scores[Healer] = 4 + 1.0 * state.typeCount[Healer];
+                scores[Healer] = 5 + 1.0 * state.typeCount[Healer];
                 break;
         }
         switch(researchInfo.get_level(Worker)) {
