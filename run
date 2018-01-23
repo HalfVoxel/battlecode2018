@@ -11,6 +11,7 @@ from itertools import chain
 from scipy.stats import poisson
 
 maps = [x.replace(".bc18map", "") for x in os.listdir("bc18-scaffold/battlecode-maps") if x.endswith(".bc18map")]
+lowerMaps = [x.lower() for x in maps]
 
 parser = argparse.ArgumentParser(description='Run BattleCode Bots')
 parser.add_argument("-a", "--teamA", help="Team A")
@@ -18,6 +19,7 @@ parser.add_argument("-b", "--teamB", help="Team B")
 parser.add_argument("--tournament", help="Play multiple games and rank the teams", action="store_true")
 parser.add_argument("-q", "--quiet", help="Don't print bot logs", action="store_true")
 parser.add_argument("--seed", help="Seed for the game or tournament", type=int)
+parser.add_argument("--map", help="Map to use")
 parser.add_argument("--threads", help="Number of threads to use", type=int, default=2)
 parser.add_argument("--dnaA", help="Genetic information for Team A", nargs="*")
 parser.add_argument("--dnaB", help="Genetic information for Team B", nargs="*")
@@ -48,9 +50,11 @@ active_commands = []
 sys.stdout.flush()
 
 
-print(yellowStr + "Backing up..." + reset)
-backupTag = "tmp" + str(random.randint(0, 10000000))
-subprocess.call(["./backup", backupTag])
+if args.teamA is None or args.teamB is None:
+    print(yellowStr + "Backing up..." + reset)
+    backupTag = "tmp" + str(random.randint(0, 10000000))
+    subprocess.call(["./backup", backupTag])
+
 env = os.environ.copy()
 env["NO_BUILD"] = '1'
 
@@ -285,4 +289,4 @@ if args.tournament:
 
 else:
     actualMap = maps[lowerMaps.index(args.map.lower())]
-    printResult(next(run(args.teamA, args.teamB, [actualMap], args.quiet, startSeed, args.dnaA, args.dnaB)), False)
+    printResult(next(run(args.teamA, args.teamB, [actualMap], args.quiet, startSeed, args.dnaA, args.dnaB, "working_dir")), False)
