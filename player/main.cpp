@@ -969,6 +969,19 @@ void updateCanSenseLocation() {
     }
 }
 
+void updateDiscoveryMap() {
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            if (canSenseLocation[i][j]) {
+                discoveryMap.weights[i][j] = 0.0;
+            }
+            else {
+                discoveryMap.weights[i][j] = min(1.0, discoveryMap.weights[i][j] + 0.005);
+            }
+        }
+    }
+}
+
 // NOTE: this call also updates enemy position map for some reason
 void updateKarboniteMap() {
     for (int i = 0; i < w; i++) {
@@ -1767,6 +1780,7 @@ int main() {
 
     computeOurStartingPositionMap();
     updatePassableMap();
+    discoveryMap = PathfindingMap(w, h);
     if (planet == Earth) {
         mapConnectedness = computeConnectedness();
         existsPathToEnemy = mapConnectedness > 0;
@@ -1813,6 +1827,7 @@ int main() {
         findUnits();
 
         updateCanSenseLocation();
+        updateDiscoveryMap();
         reusableMaps.clear();
         updateAsteroids();
         updateEnemyPositionMap();

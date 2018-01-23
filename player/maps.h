@@ -23,6 +23,7 @@ extern PathfindingMap stuckUnitMap;
 extern PathfindingMap mageNearbyMap;
 extern PathfindingMap mageNearbyFuzzyMap;
 extern PathfindingMap ourStartingPositionMap;
+extern PathfindingMap discoveryMap;
 
 enum class MapType { Target, Cost };
 

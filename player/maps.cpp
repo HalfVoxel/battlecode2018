@@ -22,5 +22,6 @@ PathfindingMap stuckUnitMap;
 PathfindingMap mageNearbyMap;
 PathfindingMap mageNearbyFuzzyMap;
 PathfindingMap ourStartingPositionMap;
+PathfindingMap discoveryMap;
 
 map<MapReuseObject, PathfindingMap> reusableMaps;
