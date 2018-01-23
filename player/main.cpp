@@ -299,7 +299,7 @@ struct BotWorker : BotUnit {
                         }
                         // 1 or 2 paths to the enemy, will be hard to invade
                         if (mapConnectedness <= 2) {
-                            factor += 0.1;
+                            factor += 0.01;
                         }
                         if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 70 && averageAttackerSuccessRate < 0.02)) {
                             factor += 0.1;
@@ -1640,8 +1640,8 @@ void coordinateMageAttacks() {
                     auto nearbyUnits = gc.sense_nearby_units_by_team(location, 30, gc.get_team());
                     double bestScore = -1;
                     unsigned int bestUnitId = 0;
-                    int bestUnitX=0;
-                    int bestUnitY=0;
+                    //int bestUnitX=0;
+                    //int bestUnitY=0;
                     for (const auto& unit : nearbyUnits) {
                         if (unit.get_unit_type() == Healer && unit.get_ability_heat() < 10) {
                             const auto& location = unit.get_location().get_map_location();
@@ -1660,10 +1660,9 @@ void coordinateMageAttacks() {
                             if (score > bestScore) {
                                 bestScore = score;
                                 bestUnitId = unit.get_id();
-                                bestUnitX = x;
-                                bestUnitY = y;
+                                //bestUnitX = x;
+                                //bestUnitY = y;
                             }
-
                         }
                     }
                     if (bestScore > 0) {
