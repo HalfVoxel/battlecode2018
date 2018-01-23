@@ -5,6 +5,7 @@ extern std::vector<std::vector<double> > wideEnemyInfluence;
 extern std::vector<std::vector<double> > rangerTargetInfluence;
 extern std::vector<std::vector<double> > enemyRangerTargetInfluence;
 extern std::vector<std::vector<double> > mageTargetInfluence;
+extern std::vector<std::vector<double> > mageProximityInfluence;
 extern std::vector<std::vector<double> > healerTargetInfluence;
 extern std::vector<std::vector<double> > knightTargetInfluence;
 extern std::vector<std::vector<double> > healerProximityInfluence;

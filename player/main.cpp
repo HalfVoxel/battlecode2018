@@ -114,7 +114,6 @@ struct BotWorker : BotUnit {
                     }
                 }
             }
-            targetMap /= stuckUnitMap + 1.0;
             reusableMaps[reuseObject] = targetMap;
         }
 
@@ -254,7 +253,7 @@ struct BotWorker : BotUnit {
                         if (mapConnectedness <= 2) {
                             factor += 0.1;
                         }
-                        if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 10 && averageAttackerSuccessRate < 0.05)) {
+                        if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 70 && averageAttackerSuccessRate < 0.05)) {
                             factor += 0.1;
                         }
                         double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
@@ -497,9 +496,11 @@ struct BotHealer : BotUnit {
     }
 
     void doOvercharge() {
-        return;
         if (hasOvercharge && unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
-            const auto nearby = gc.sense_nearby_units(unit.get_location().get_map_location(), unit.get_ability_range());
+            const auto& location = unit.get_location().get_map_location();
+            if (mageNearbyMap.weights[location.get_x()][location.get_y()] > 0)
+                return;
+            const auto nearby = gc.sense_nearby_units(location, unit.get_ability_range());
 
             const Unit* best_unit = nullptr;
             double best_unit_score = 0;
@@ -699,6 +700,9 @@ struct Researcher {
                 break;
             case 2:
                 scores[Mage] = 2 + 1.0 * state.typeCount[Mage];
+                break;
+            case 3:
+                scores[Mage] = 3 + 1.0 * state.typeCount[Mage];
                 break;
         }
         if (researchInfo.get_level(Healer) >= 3) {
@@ -1004,6 +1008,16 @@ void updateWorkerMaps() {
     }
 }
 
+void updateMageNearbyMap() {
+    mageNearbyMap = PathfindingMap(w, h);
+    for (auto& u : ourUnits) {
+        if (u.get_unit_type() == Mage && u.get_location().is_on_map()) {
+            auto pos = u.get_location().get_map_location();
+            mageNearbyMap.maxInfluence(mageProximityInfluence, pos.get_x(), pos.get_y());
+        }
+    }
+}
+
 void updateStructureProximityMap() {
     structureProximityMap = PathfindingMap(w, h);
     rocketProximityMap = PathfindingMap(w, h);
@@ -1112,7 +1126,7 @@ void updateStuckUnitMap() {
                 }
             }
         }
-        double score = 20.0 / (1.0 + moveDirections * moveDirections);
+        double score = 5.0 / (1.0 + moveDirections * moveDirections);
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
                 int nx = x+dx;
@@ -1329,6 +1343,8 @@ void coordinateMageAttacks() {
     cout << "Coordinating mage attacks" << endl;
     auto start = millis();
     while (true) {
+        findUnits();
+        createUnits();
         PathfindingMap canShootAtMap(w, h);
         PathfindingMap shootMap(w, h);
         PathfindingMap healerMap(w, h);
@@ -1377,11 +1393,18 @@ void coordinateMageAttacks() {
             int x = mapLocation.get_x();
             int y = mapLocation.get_y();
             distanceToMage.weights[x][y] = 0;
-            /*if (unit.get_movement_heat() < 10) {
+            if (unit.get_movement_heat() < 10) {
                 distanceToMage.weights[x][y]--;
-            }*/
+                bfsQueue.push(make_pair(x, y));
+            }
             minHealerSum[x][y] = healerMap.weights[x][y];
-            bfsQueue.push(make_pair(x, y));
+        }
+        for (int x = 0; x < w; ++x) {
+            for (int y = 0; y < h; ++y) {
+                if (distanceToMage.weights[x][y] == 0) {
+                    bfsQueue.push(make_pair(x, y));
+                }
+            }
         }
         while(!bfsQueue.empty()) {
             auto cur = bfsQueue.front();
@@ -1401,12 +1424,15 @@ void coordinateMageAttacks() {
                         continue;
                     if (distanceToMage.weights[x][y]+1 < distanceToMage.weights[nx][ny]) {
                         distanceToMage.weights[nx][ny] = distanceToMage.weights[x][y]+1;
-                        bfsQueue.push(make_pair(x, y));
+                        bfsQueue.push(make_pair(nx, ny));
                         distanceToMageParent[nx][ny] = cur;
                     }
                     if (distanceToMage.weights[x][y]+1 == distanceToMage.weights[nx][ny]) {
-                        int healerSum = healerMap.weights[x][y] + distanceToMage.weights[nx][ny];
-                        minHealerSum[nx][ny] = max(minHealerSum[nx][ny], min(minHealerSum[x][y], healerSum));
+                        int healerSum = min(minHealerSum[x][y], (int)(healerMap.weights[nx][ny] + distanceToMage.weights[nx][ny]));
+                        if (healerSum > minHealerSum[nx][ny]) {
+                            minHealerSum[nx][ny] = healerSum;
+                            distanceToMageParent[nx][ny] = cur;
+                        }
                     }
                 }
             }
@@ -1414,7 +1440,7 @@ void coordinateMageAttacks() {
         vector<pair<double, pair<int, int> > > bestTargets;
         for (int x = 0; x < w; ++x) {
             for (int y = 0; y < h; ++y) {
-                if (targetMap.weights[x][y] > 0 && healerMap.weights[x][y] > 0 && distanceToMage.weights[x][y] > 0 && distanceToMage.weights[x][y] < 1000) {
+                if (targetMap.weights[x][y] > 0 && distanceToMage.weights[x][y] > 0 && distanceToMage.weights[x][y] < 1000) {
                     double score = targetMap.weights[x][y] / (distanceToMage.weights[x][y]);
                     bestTargets.emplace_back(score, make_pair(x, y));
                 }
@@ -1437,7 +1463,7 @@ void coordinateMageAttacks() {
             reverse(path.begin(), path.end());
             cout << "Found the following path:" << endl;
             for (auto& node : path) {
-                cout << node.first << " " << node.second << endl;
+                cout << node.first << " " << node.second << " - " << healerMap.weights[node.first][node.second] << " " << distanceToMage.weights[node.first][node.second] << " " << minHealerSum[node.first][node.second] << endl;
             }
             MapLocation location(planet, path[0].first, path[0].second);
             if (!canSenseLocation[path[0].first][path[0].second]) {
@@ -1465,19 +1491,34 @@ void coordinateMageAttacks() {
                     auto nearbyUnits = gc.sense_nearby_units_by_team(location, 30, gc.get_team());
                     double bestScore = -1;
                     unsigned int bestUnitId = 0;
+                    int bestUnitX=0;
+                    int bestUnitY=0;
                     for (const auto& unit : nearbyUnits) {
                         if (unit.get_unit_type() == Healer && unit.get_ability_heat() < 10) {
                             const auto& location = unit.get_location().get_map_location();
-                            double score = 1.0 / (enemyNearbyMap.weights[location.get_x()][location.get_y()] + 1.0);
+                            int x = location.get_x();
+                            int y = location.get_y();
+                            int lastOverchargeChance = i;
+                            for (size_t j = i+1; j+1 < path.size(); ++j) {
+                                int dx = x - path[j].first;
+                                int dy = y - path[j].second;
+                                int dis2 = dx*dx + dy*dy;
+                                if (dis2 <= 30) {
+                                    lastOverchargeChance = j;
+                                }
+                            }
+                            double score = 100 - lastOverchargeChance;// + 1.0 / (enemyNearbyMap.weights[x][y] + 1.0);
                             if (score > bestScore) {
                                 bestScore = score;
                                 bestUnitId = unit.get_id();
+                                bestUnitX = x;
+                                bestUnitY = y;
                             }
 
                         }
                     }
                     if (bestScore > 0) {
-                        cout << "Overcharging mage!" << endl;
+                        cout << "Overcharging mage! (" << bestUnitX << "," << bestUnitY << " score = " << bestScore << ")" << endl;
                         gc.overcharge(bestUnitId, botUnit->unit.get_id());
                         invalidate_unit(botUnit->unit.get_id());
                         invalidate_unit(bestUnitId);
@@ -1488,6 +1529,7 @@ void coordinateMageAttacks() {
                 }
                 if (botUnit->unit.get_movement_heat() >= 10) {
                     cout << "Warning! Attacking mage couldn't make it to target spot" << endl;
+                    assert(0);
                     break;
                 }
                 cout << "Overcharged mage moving from " << location.get_x() << " " << location.get_y() << " to " << path[i+1].first << " " << path[i+1].second << endl;
@@ -1571,6 +1613,8 @@ int main() {
     anyReasonableLandingSpotOnInitialMars = get<0>(find_best_landing_spot());
 
     enemyPositionMap = PathfindingMap(w, h);
+    // Write that we have no rockets in the beginning.
+    gc.write_team_array(1, 0);
 
     double preprocessingComputationTime = 0;
     double totalTurnTime = 0.0;
@@ -1599,6 +1643,7 @@ int main() {
         updateKarboniteMap();
         updateEnemyInfluenceMaps();
         updateWorkerMaps();
+        updateMageNearbyMap();
         updateStructureProximityMap();
         updateDamagedStructuresMap();
         

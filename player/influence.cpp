@@ -10,6 +10,7 @@ vector<vector<double> > wideEnemyInfluence;
 vector<vector<double> > rangerTargetInfluence;
 vector<vector<double> > enemyRangerTargetInfluence;
 vector<vector<double> > mageTargetInfluence;
+vector<vector<double> > mageProximityInfluence;
 vector<vector<double> > healerTargetInfluence;
 vector<vector<double> > healerOverchargeInfluence;
 vector<vector<double> > knightTargetInfluence;
@@ -82,6 +83,7 @@ void initInfluence() {
     
     healerTargetInfluence = calculate_uniform_disc_influence(30);
     mageTargetInfluence = calculate_uniform_disc_influence(30);
+    mageProximityInfluence = calculate_uniform_disc_influence(30);
     knightTargetInfluence = calculate_uniform_disc_influence(2);
     
     r = 5;

@@ -20,6 +20,7 @@ extern PathfindingMap rocketAttractionMap;
 extern PathfindingMap rocketProximityMap;
 extern PathfindingMap healerOverchargeMap;
 extern PathfindingMap stuckUnitMap;
+extern PathfindingMap mageNearbyMap;
 
 enum class MapType { Target, Cost };
 
