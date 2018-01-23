@@ -763,7 +763,7 @@ struct Researcher {
                 scores[Mage] = 3 + 1.0 * state.typeCount[Mage];
                 break;
         }
-        if (scores[Mage] <= 3 && researchInfo.get_level(Healer) >= 3) {
+        if (researchInfo.get_level(Mage) <= 3 && researchInfo.get_level(Healer) >= 3) {
             scores[Mage] += 5;
         }
         switch(researchInfo.get_level(Ranger)) {
