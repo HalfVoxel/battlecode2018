@@ -23,6 +23,7 @@ double averageHealerSuccessRate;
 map<UnitType, double> timeConsumptionByUnit;
 map<UnitType, string> unitTypeToString;
 bool hasOvercharge;
+bool hasBlink;
 double bestMacroObjectScore;
 bool existsPathToEnemy;
 
@@ -703,7 +704,7 @@ struct Researcher {
             case 0:
                 scores[Mage] = 3 + 1.0 * state.typeCount[Mage];
                 if (hasOvercharge)
-                    scores[Mage] += 10;
+                    scores[Mage] += 50;
                 break;
             case 1:
                 scores[Mage] = 2.5 + 1.0 * state.typeCount[Mage];
@@ -1311,6 +1312,9 @@ void updateResearchStatus() {
     if (researchInfo.get_level(Healer) >= 3) {
         hasOvercharge = true;
     }
+    if (researchInfo.get_level(Mage) >= 4) {
+        hasBlink = true;
+    }
 }
 
 int computeConnectedness() {
@@ -1551,6 +1555,18 @@ void coordinateMageAttacks() {
                 cout << "Overcharged mage moving from " << location.get_x() << " " << location.get_y() << " to " << path[i+1].first << " " << path[i+1].second << endl;
                 botUnit->moveToLocation(MapLocation(planet, path[i+1].first, path[i+1].second));
                 mage_attack(botUnit->unit);
+                if (hasBlink && botUnit->unit.get_ability_heat() < 10 && i < path.size()-2) {
+                    int j = min(i+3, path.size()-1);
+                    cout << "Should be able to blink to " << path[j].first << " " << path[j].second << endl;
+                    const MapLocation blinkTo(planet, path[j].first, path[j].second);
+                    if (gc.can_begin_blink(botUnit->unit.get_id(), blinkTo)) {
+                        cout << "Blinking to " << path[j].first << " " << path[j].second << endl;
+                        gc.blink(botUnit->unit.get_id(), blinkTo);
+                        invalidate_unit(botUnit->unit.get_id());
+                        mage_attack(botUnit->unit);
+                        i = j;
+                    }
+                }
             }
             if (anyOvercharge)
                 break;
