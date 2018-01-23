@@ -305,7 +305,7 @@ struct BotWorker : BotUnit {
                         }
                         double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
                         score -= karboniteMap.weights[x][y] * 0.001;
-                        score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y]) * 0.001;
+                        score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y] + enemyNearbyMap.weights[x][y]) * 0.001;
                         macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
                             if(gc.can_blueprint(id, Rocket, d)){
                                 gc.blueprint(id, Rocket, d);
@@ -763,7 +763,7 @@ struct Researcher {
                 scores[Mage] = 3 + 1.0 * state.typeCount[Mage];
                 break;
         }
-        if (researchInfo.get_level(Healer) >= 3) {
+        if (scores[Mage] <= 3 && researchInfo.get_level(Healer) >= 3) {
             scores[Mage] += 5;
         }
         switch(researchInfo.get_level(Ranger)) {
@@ -823,6 +823,9 @@ struct Researcher {
                 }
                 if (!existsPathToEnemy) {
                     scores[Rocket] += 1000;
+                }
+                if (gc.get_round() > 500) {
+                    scores[Rocket] += 30;
                 }
                 // Few paths to the enemy. Will be hard to invade on earth
                 if (mapConnectedness <= 2) {
@@ -1044,20 +1047,25 @@ void updateEnemyInfluenceMaps(){
 
 void computeOurStartingPositionMap() {
     ourStartingPositionMap = PathfindingMap(w, h);
-    auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
-    for (auto& unit : initial_units) {
-        if (!unit.get_location().is_on_map())
-            continue;
-        if (unit.get_team() == ourTeam) {
-            auto pos = unit.get_location().get_map_location();
-            for (int x = 0; x < w; ++x) {
-                for (int y = 0; y < h; ++y) {
-                    int dx = pos.get_x() - x;
-                    int dy = pos.get_y() - y;
-                    ourStartingPositionMap.weights[x][y] = max(ourStartingPositionMap.weights[x][y], 200.0 / (dx * dx + dy * dy + 200.0));
+    if (planet == Earth) {
+        auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
+        for (auto& unit : initial_units) {
+            if (!unit.get_location().is_on_map())
+                continue;
+            if (unit.get_team() == ourTeam) {
+                auto pos = unit.get_location().get_map_location();
+                for (int x = 0; x < w; ++x) {
+                    for (int y = 0; y < h; ++y) {
+                        int dx = pos.get_x() - x;
+                        int dy = pos.get_y() - y;
+                        ourStartingPositionMap.weights[x][y] = max(ourStartingPositionMap.weights[x][y], 200.0 / (dx * dx + dy * dy + 200.0));
+                    }
                 }
             }
         }
+    }
+    else {
+        ourStartingPositionMap += 1;
     }
 }
 
@@ -1513,7 +1521,7 @@ void coordinateMageAttacks() {
                 continue;
             }
             int D = d+1;
-            if (D%2 == 1)
+            if (d%2 == 0)
                 ++D;
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
