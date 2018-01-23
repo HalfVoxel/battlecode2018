@@ -1274,7 +1274,7 @@ void updateRocketAttractionMap() {
     rocketAttractionMap = PathfindingMap(w, h);
     for (auto& u : ourUnits) {
         if (u.get_location().is_on_map()) {
-            if (u.get_unit_type() == Rocket && u.structure_is_built()) {
+            if (u.get_unit_type() == Rocket && u.structure_is_built() && u.get_structure_garrison().size() < u.get_structure_max_capacity()) {
                 auto pos = u.get_location().get_map_location();
                 rocketAttractionMap.weights[pos.get_x()][pos.get_y()] = 10;
             }

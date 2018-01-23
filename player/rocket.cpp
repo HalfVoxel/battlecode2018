@@ -34,6 +34,13 @@ vector<vector<double>> mars_karbonite_map(int time) {
     return res;
 }
 
+bool reasonableTimeToLaunchRocket () {
+    auto& orbit = gc.get_orbit_pattern();
+    double derivative = orbit.get_amplitude() * (2*M_PI / orbit.get_period()) * cos(gc.get_round() * (2*M_PI / orbit.get_period()));
+    // Only launch if the travel time will not be reduced by more than 1 turn by simply waiting 1 turn.
+    return derivative >= -1;
+}
+
 map<int, int> visitedMarsRegions;
 PathfindingMap dontLandSpots(MAX_MAP_SIZE,MAX_MAP_SIZE);
 
@@ -142,7 +149,7 @@ void BotRocket::tick() {
             }
         }
         unsigned int countInGarrison = unit.get_structure_garrison().size();
-        if (countInGarrison == unit.get_structure_max_capacity() || gc.get_round() == 749 || (workerCount && !launchedWorkerCount) || (countInGarrison > 0 && unit.get_health() < unit.get_max_health()*0.6)) {
+        if ((reasonableTimeToLaunchRocket() && (countInGarrison == unit.get_structure_max_capacity() || (workerCount && !launchedWorkerCount))) || gc.get_round() == 749 || (countInGarrison > 0 && unit.get_health() < unit.get_max_health()*0.6)) {
             bool anyLandingSpot;
             MapLocation landingSpot;
             int marsRegion;
