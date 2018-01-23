@@ -1438,7 +1438,6 @@ void coordinateMageAttacks() {
     if (!hasOvercharge || !state.typeCount[Mage]) {
         return;
     }
-    cout << "Coordinating mage attacks" << endl;
     auto start = millis();
     while (true) {
         PathfindingMap canShootAtMap(w, h);
@@ -1588,8 +1587,6 @@ void coordinateMageAttacks() {
         if (!bestTargets.size()) {
             break;
         }
-        cout << "######################################################################" << endl;
-        cout << "Found " << bestTargets.size() << " viable targets" << endl;
         sort(bestTargets.rbegin(), bestTargets.rend());
         bool anyOvercharge = false;
         for (auto& target : bestTargets) {
@@ -1600,7 +1597,6 @@ void coordinateMageAttacks() {
                 curNode = distanceToMageParent[curNode.first][curNode.second];
             }
             reverse(path.begin(), path.end());
-            cout << "Found the following path:" << endl;
             for (auto& node : path) {
                 cout << node.first << " " << node.second << " - " << healerMap.weights[node.first][node.second] << " " << distanceToMage.weights[node.first][node.second] << " " << minHealerSum[node.first][node.second] << endl;
             }
@@ -1658,7 +1654,6 @@ void coordinateMageAttacks() {
                         }
                     }
                     if (bestScore > 0) {
-                        cout << "Overcharging mage! (" << bestUnitX << "," << bestUnitY << " score = " << bestScore << ")" << endl;
                         gc.overcharge(bestUnitId, botUnit->unit.get_id());
                         invalidate_unit(botUnit->unit.get_id());
                         invalidate_unit(bestUnitId);
@@ -1675,10 +1670,8 @@ void coordinateMageAttacks() {
                 }
                 if (hasBlink && botUnit->unit.get_ability_heat() < 10) {
                     int j = min(i+1, path.size()-1);
-                    cout << "Should blink to " << path[j].first << " " << path[j].second << endl;
                     const MapLocation blinkTo(planet, path[j].first, path[j].second);
                     if (gc.can_begin_blink(botUnit->unit.get_id(), blinkTo)) {
-                        cout << "Blinking to " << path[j].first << " " << path[j].second << endl;
                         passableMap.weights[location.get_x()][location.get_y()] = 1;
                         gc.blink(botUnit->unit.get_id(), blinkTo);
                         invalidate_unit(botUnit->unit.get_id());
@@ -1691,7 +1684,6 @@ void coordinateMageAttacks() {
                     }
                 }
                 if (i < path.size()-1) {
-                    cout << "Overcharged mage moving from " << location.get_x() << " " << location.get_y() << " to " << path[i+1].first << " " << path[i+1].second << endl;
                     botUnit->moveToLocation(MapLocation(planet, path[i+1].first, path[i+1].second));
                     mage_attack(botUnit->unit);
                     location = botUnit->unit.get_location().get_map_location();
