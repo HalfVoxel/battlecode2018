@@ -4,6 +4,7 @@
 if [ "$NO_BUILD" = '1' ]; then
     echo "Skipping build"
 else
+    chmod +x build.sh
     ./build.sh
 fi
 
