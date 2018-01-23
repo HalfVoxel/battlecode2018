@@ -1030,10 +1030,10 @@ void updateEnemyInfluenceMaps(){
                 enemyInfluenceMap.addInfluence(enemyRangerTargetInfluence, pos.get_x(), pos.get_y());
             }
             if (u.get_unit_type() == Mage) {
-                enemyInfluenceMap.addInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
+                enemyInfluenceMap.addInfluenceMultiple(enemyMageTargetInfluence, pos.get_x(), pos.get_y(), 2.0);
             }
             if (u.get_unit_type() == Knight) {
-                enemyInfluenceMap.addInfluence(knightTargetInfluence, pos.get_x(), pos.get_y());
+                enemyInfluenceMap.addInfluenceMultiple(enemyKnightTargetInfluence, pos.get_x(), pos.get_y(), 3.0);
             }
             enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
             enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
@@ -1042,17 +1042,19 @@ void updateEnemyInfluenceMaps(){
         }
     }
 
-    auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
-    for (auto& unit : initial_units) {
-        if (!unit.get_location().is_on_map())
-            continue;
-        if (unit.get_team() == enemyTeam) {
-            auto pos = unit.get_location().get_map_location();
-            for (int x = 0; x < w; ++x) {
-                for (int y = 0; y < h; ++y) {
-                    int dx = pos.get_x() - x;
-                    int dy = pos.get_y() - y;
-                    enemyNearbyMap.weights[x][y] += 0.01 / (dx * dx + dy * dy + 5);
+    if (planet == Earth) {
+        auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
+        for (auto& unit : initial_units) {
+            if (!unit.get_location().is_on_map())
+                continue;
+            if (unit.get_team() == enemyTeam) {
+                auto pos = unit.get_location().get_map_location();
+                for (int x = 0; x < w; ++x) {
+                    for (int y = 0; y < h; ++y) {
+                        int dx = pos.get_x() - x;
+                        int dy = pos.get_y() - y;
+                        enemyNearbyMap.weights[x][y] += 0.01 / (dx * dx + dy * dy + 5);
+                    }
                 }
             }
         }

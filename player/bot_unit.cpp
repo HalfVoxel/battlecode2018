@@ -10,7 +10,7 @@ double averageAttackerSuccessRate;
 // Relative values of different unit types when at "low" (not full) health
 const float unit_defensive_strategic_value[] = {
     1, // Worker
-    3, // Knight
+    4, // Knight
     3, // Ranger
     7, // Mage
     5, // Healer
@@ -21,7 +21,7 @@ const float unit_defensive_strategic_value[] = {
 // Relative values of different unit types when at full or almost full health
 const float unit_strategic_value[] = {
     1, // Worker
-    3, // Knight
+    4, // Knight
     3, // Ranger
     7, // Mage
     5, // Healer
@@ -220,6 +220,8 @@ void mage_attack(const Unit& unit) {
 
         float fractional_health = place.get_health() / (float)place.get_max_health();
         float value = values[place.get_unit_type()] / (fractional_health + 2.0);
+        if (place.get_team() != unit.get_team() && place.get_unit_type() == Knight)
+            value += 1;
         if (place.get_team() == unit.get_team()) value = -value;
 
         auto location = place.get_location().get_map_location();
@@ -300,9 +302,7 @@ void attack_all_in_range(const Unit& unit) {
         float value = values[place.get_unit_type()];
         if (nearbyFriendly <= 2 && place.get_unit_type() == Mage)
             value -= 2;
-        if (unit.get_unit_type() == Mage && place.get_unit_type() == Knight)
-            value += 1;
-        value /= fractional_health;
+        value /= (fractional_health + 0.3);
         value *= value;
         value *= value;
 

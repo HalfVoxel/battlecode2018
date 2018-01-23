@@ -9,6 +9,8 @@ using namespace std;
 vector<vector<double> > wideEnemyInfluence;
 vector<vector<double> > rangerTargetInfluence;
 vector<vector<double> > enemyRangerTargetInfluence;
+vector<vector<double> > enemyMageTargetInfluence;
+vector<vector<double> > enemyKnightTargetInfluence;
 vector<vector<double> > mageTargetInfluence;
 vector<vector<double> > mageProximityInfluence;
 vector<vector<double> > mageNearbyFuzzyInfluence;
@@ -37,6 +39,25 @@ vector<vector<double>> calculate_uniform_disc_influence(int squared_radius) {
     return res;
 }
 
+vector<vector<double>> calculate_rough_disc_influence(int squared_radius) {
+    int r = (int)ceil(sqrt(squared_radius)) + 1;
+    auto res = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 <= squared_radius) {
+                res[dx+r][dy+r] = 1;
+            } else {
+                int dx2 = abs(dx)+1, dy2 = abs(dy)+1;
+                dis2 = dx2*dx2 + dy2*dy2;
+                if (dis2 <= squared_radius)
+                    res[dx+r][dy+r] = 0.5;
+            }
+        }
+    }
+    return res;
+}
+
 void initInfluence() {
     int r = 7;
     rangerTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
@@ -53,7 +74,7 @@ void initInfluence() {
         }
     }
     
-    r = 7;
+    r = 8;
     enemyRangerTargetInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
@@ -84,8 +105,10 @@ void initInfluence() {
     
     healerTargetInfluence = calculate_uniform_disc_influence(30);
     mageTargetInfluence = calculate_uniform_disc_influence(30);
+    enemyMageTargetInfluence = calculate_rough_disc_influence(30);
     mageProximityInfluence = calculate_uniform_disc_influence(30);
     knightTargetInfluence = calculate_uniform_disc_influence(2);
+    enemyKnightTargetInfluence = calculate_rough_disc_influence(2);
     
     r = 7;
     mageNearbyFuzzyInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
