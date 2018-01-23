@@ -609,16 +609,10 @@ struct BotFactory : BotUnit {
                 if (otherMilitary > state.typeCount[Healer]) {
                     double score = 0.0;
                     if (state.typeCount[Ranger] > 6) {
-                        score += 2.5;
+                        score += 4.5;
                     }
                     if (state.typeCount[Ranger] > 10) {
-                        score += 1.5;
-                    }
-                    if (state.typeCount[Ranger] > 14) {
-                        score += 1.5;
-                    }
-                    if (state.totalRobotDamage > 200) {
-                        score += 3.0;
+                        score += state.typeCount[Ranger] * 0.7 + state.typeCount[Mage] * 0.7;
                     }
                     score /= state.typeCount[Healer];
                     score += averageHealerSuccessRate * 1.8;
@@ -1557,14 +1551,14 @@ void coordinateMageAttacks() {
                 mage_attack(botUnit->unit);
                 if (hasBlink && botUnit->unit.get_ability_heat() < 10 && i < path.size()-2) {
                     int j = min(i+3, path.size()-1);
-                    cout << "Should be able to blink to " << path[j].first << " " << path[j].second << endl;
                     const MapLocation blinkTo(planet, path[j].first, path[j].second);
                     if (gc.can_begin_blink(botUnit->unit.get_id(), blinkTo)) {
                         cout << "Blinking to " << path[j].first << " " << path[j].second << endl;
                         gc.blink(botUnit->unit.get_id(), blinkTo);
                         invalidate_unit(botUnit->unit.get_id());
                         mage_attack(botUnit->unit);
-                        i = j;
+                        i = j - 1;
+                        anyOvercharge = true;
                     }
                 }
             }
