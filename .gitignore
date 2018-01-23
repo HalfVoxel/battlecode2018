@@ -1,4 +1,6 @@
 /working_dir
+/workingDir*
+/backups
 server.log
 /replays
 /replay.bc18
