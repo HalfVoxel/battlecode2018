@@ -8,6 +8,7 @@ import sys
 import random
 import signal
 from itertools import chain
+from scipy.stats import poisson
 
 maps = [x.replace(".bc18map", "") for x in os.listdir("bc18-scaffold/battlecode-maps") if x.endswith(".bc18map")]
 
@@ -112,9 +113,11 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
         args.append(workingDir)
 
         winRegex = re.compile(r"Winner is player (\d)")
+        sizeRegex = re.compile(r"MAP IS (\d+)x(\d+)")
         roundRegex = re.compile(r".* Round: (\d+)")
         mapIndex = 0
         lastRound = 0
+        mapSize = None
         try:
             gen = execute(args, quiet)
             next(gen)
@@ -124,6 +127,14 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
                 roundMatch = roundRegex.search(line)
                 if roundMatch is not None:
                     lastRound = int(roundMatch.group(1))
+
+                sizeMatch = sizeRegex.search(line)
+                if sizeMatch is not None:
+                    newMapSize = (int(sizeMatch.group(1)), int(sizeMatch.group(2)))
+                    if newMapSize != mapSize and mapSize is not None:
+                        print("Warning: Conflicting map sizes", str(mapSize), str(newMapSize))
+
+                    mapSize = newMapSize
 
                 if lastRound % 100 == 0:
                     yield None
@@ -142,18 +153,31 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
                     round = lastRound
                     reason = ""
                     mapIndex += 1
-                    yield (winningTeam, round, reason, mapName)
+                    yield (winningTeam, round, reason, mapName, mapSize)
         except subprocess.CalledProcessError:
             print("\rServer crashed. Ignoring the rest of the maps")
             return
 
 
-def printResult(result):
+def printResult(result, switch):
     team = result[0]
     round = result[1]
     reason = result[2]
+    mapName = result[3]
+    size = result[4]
+    if size is None:
+        size = ('?','?')
+
     teamStr = (greenStr if team == "A" else redStr) + team + reset
+
+    if switch:
+        team = "B" if team == "A" else "A"
+
+    mapStr = yellowStr + mapName.ljust(18) + reset + " " + (str(size[0]) + "x" + str(size[1])).ljust(5) + "   " + ("B vs A" if switch else "A vs B") + ": "
+
+    print("\r" + mapStr, end="             ")
     print(teamStr + " won at round " + str(round) + " " + reason)
+    sys.stdout.flush()
 
 
 # Make sure the seed is reset to 0 even if the user terminates the program
@@ -189,14 +213,7 @@ def run_tournament_part(teamA, teamB, dnaA, dnaB, switch, seed, maps):
             yield None
             continue
 
-        mapStr = yellowStr + result[3].ljust(12) + reset + " " + ("B vs A" if switch else "A vs B") + ": "
-        sys.stdout.flush()
-
-        if switch:
-            result = ("B" if result[0] == "A" else "A", result[1], result[2])
-
-        print("\r" + mapStr, end="                  ")
-        printResult(result)
+        printResult(result, switch)
 
         yield result[0] == "A"
 
@@ -252,9 +269,20 @@ if args.tournament:
                     teamAwins += 1
                 totalCount += 1
                 percentage = (teamAwins / totalCount) * 100 if totalCount > 0 else 50
-                print("Team A has won %.1f%% of the time (%s of %s)" % (percentage, teamAwins, totalCount), end="                  ")
+                print("Team A has won %.1f%% of the time (%s of %s)" % (percentage, teamAwins, totalCount), end="")
+                pValue = 1 - poisson.cdf(teamAwins - 1, totalCount/2)
+                if pValue < 0.15:
+                    print(", team A is better than B (p < " + str(round(pValue*1000)/10) + "%)", end="")
+
+                teamBwins = totalCount - teamAwins
+                pValue = 1 - poisson.cdf(teamBwins - 1, totalCount/2)
+                if pValue < 0.15:
+                    print(", team B is better than A (p < " + str(round(pValue*1000)/10) + "%)", end="")
+
+                print("", end="                  ")
+
                 sys.stdout.flush()
 
 else:
     actualMap = maps[lowerMaps.index(args.map.lower())]
-    printResult(next(run(args.teamA, args.teamB, [actualMap], args.quiet, startSeed, args.dnaA, args.dnaB)))
+    printResult(next(run(args.teamA, args.teamB, [actualMap], args.quiet, startSeed, args.dnaA, args.dnaB)), False)

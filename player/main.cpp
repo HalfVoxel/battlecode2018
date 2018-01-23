@@ -1635,12 +1635,15 @@ int main() {
         mapConnectedness = 10;
         existsPathToEnemy = true;
     }
-    
+
     anyReasonableLandingSpotOnInitialMars = get<0>(find_best_landing_spot());
 
     enemyPositionMap = PathfindingMap(w, h);
     // Write that we have no rockets in the beginning.
     gc.write_team_array(1, 0);
+
+    // Note: Used for tournament script to show statistics
+    if (planet == Earth) cout << "MAP IS " << w << "x" << h << endl;
 
     double preprocessingComputationTime = 0;
     double totalTurnTime = 0.0;
