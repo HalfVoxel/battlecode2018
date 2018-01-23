@@ -336,7 +336,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         targetMap = reusableMaps[reuseObject];
     }
     else {
-        targetMap = enemyNearbyMap * 0.0001 + discoveryMap * 0.0001;
+        targetMap = enemyNearbyMap * 0.0003 + discoveryMap * 0.0001;
 
         for (auto& enemy : enemyUnits) {
             if (enemy.get_location().is_on_map()) {
