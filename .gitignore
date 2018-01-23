@@ -1,3 +1,8 @@
 /working_dir
 server.log
 /replays
+/replay.bc18
+*.o
+/player/main
+/_deploy
+/_deploy.zip
