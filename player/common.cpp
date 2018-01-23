@@ -103,7 +103,11 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     safe_write("\n\n!!! caught signal: ");
     safe_write(strsignal(sig));
     safe_write("\non line:\n");
-#ifndef __APPLE__
+#ifdef __APPLE__
+    // I think this should work, but untested:
+    // ucontext_t *context = (ucontext_t *)arg;
+    // addr2line((void*)context->uc_mcontext->__ss.__rip);
+#else
     ucontext_t *context = (ucontext_t *)arg;
     addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
 #endif
