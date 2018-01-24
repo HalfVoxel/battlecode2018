@@ -820,7 +820,8 @@ struct Researcher {
                 }
 
                 scores[Rocket] = 7;
-                if (state.typeCount[Knight] + state.typeCount[Mage] + state.typeCount[Ranger] > 100) {
+                // if (state.typeCount[Knight] + state.typeCount[Mage] + state.typeCount[Ranger] > 150)
+                if (state.typeCount[Ranger] > 100) {
                     scores[Rocket] += 200;
                 }
                 if (gc.get_round() > 150 && (averageAttackerSuccessRate < 0.001 || turnsSinceLastFight > 20)) {
@@ -850,7 +851,7 @@ struct Researcher {
         }
 
         // Don't get rockets if we won't have time to use them before the flood anyway
-        if (gc.get_round() > 750 - 100 - 5) {
+        if (gc.get_round() > 750 - 50 - 5) {
             scores[Rocket] = 0.01;
         }
 
