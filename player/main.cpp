@@ -613,8 +613,13 @@ struct BotFactory : BotUnit {
                 double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
                 if (nearbyEnemiesWeight > 0.8)
                     score += 5;
-                if (nearbyEnemiesWeight > 0.9)
+                if (nearbyEnemiesWeight > 0.9) {
                     score += 5;
+                    if (gc.get_round() < 100)
+                        score += 30;
+                }
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 15 && gc.get_round() < 40)
+                    score += 20;
                 score /= state.typeCount[Knight] + 1.0;
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
                     if (gc.can_produce_robot(id, Knight)) {

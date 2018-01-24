@@ -348,7 +348,31 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
                 }
                 else {
-                    targetMap.maxInfluence(knightTargetInfluence, pos.get_x(), pos.get_y());
+                    double factor = 1;
+                    switch (enemy.get_unit_type()) {
+                        case Worker:
+                            factor = 0.2;
+                            break;
+                        case Ranger:
+                            factor = 2.0;
+                            break;
+                        case Mage:
+                            factor = 2.0;
+                            break;
+                        case Knight:
+                            factor = 0.5;
+                            break;
+                        case Healer:
+                            factor = 0.8;
+                            break;
+                        case Factory:
+                            factor = 0.6;
+                            break;
+                        case Rocket:
+                            factor = 0.4;
+                            break;
+                    }
+                    targetMap.maxInfluenceMultiple(knightTargetInfluence, pos.get_x(), pos.get_y(), factor);
                 }
             }
         }
@@ -371,8 +395,11 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     }
                     auto pos = u.get_location().get_map_location();
                     double factor = 10;
-                    if (unit.get_unit_type() == Mage || unit.get_unit_type() == Knight) {
+                    if (unit.get_unit_type() == Mage) {
                         factor = 0.4;
+                    }
+                    else if (unit.get_unit_type() == Knight) {
+                        factor = 0.01;
                     }
                     targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), factor);
                 }
@@ -406,9 +433,16 @@ PathfindingMap BotUnit::defaultMilitaryCostMap () {
         return reusableMaps[reuseObject];
     }
     else {
-        auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
-        reusableMaps[reuseObject] = costMap;
-        return costMap;
+        if (unit.get_unit_type() == Knight) {
+            auto costMap = passableMap + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
+            reusableMaps[reuseObject] = costMap;
+            return costMap;
+        }
+        else {
+            auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
+            reusableMaps[reuseObject] = costMap;
+            return costMap;
+        }
     }
 }
 
