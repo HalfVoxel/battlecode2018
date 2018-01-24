@@ -31,13 +31,13 @@ const float unit_strategic_value[] = {
 
 // Relative values of different unit types when at Mars
 const float unit_martian_strategic_value[] = {
-    1.5, // Worker
+    0.5, // Worker
     3, // Knight
     4, // Ranger
     6, // Mage
     5, // Healer
-    1, // Factory
-    1, // Rocket
+    0.1, // Factory
+    0.1, // Rocket
 };
 
 void BotUnit::tick() {}
@@ -414,14 +414,14 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         }
 
         targetMap /= stuckUnitMap + 1.0;
-        
+
         if (unit.get_unit_type() == Mage) {
             targetMap /= mageNearbyFuzzyMap + 0.1;
         }
 
         reusableMaps[reuseObject] = targetMap;
     }
-    
+
     addRocketTarget(unit, targetMap);
     return targetMap;
 }
