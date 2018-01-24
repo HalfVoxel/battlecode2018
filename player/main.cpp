@@ -1548,6 +1548,32 @@ void coordinateMageAttacks() {
             int x = mapLocation.get_x();
             int y = mapLocation.get_y();
             double multiplier = unit.get_team() == gc.get_team() ? -1 : 1;
+            switch (unit.get_unit_type()) {
+                case Ranger:
+                    multiplier *= 1;
+                    break;
+                case Healer:
+                    multiplier *= 1.3;
+                    break;
+                case Knight:
+                    multiplier *= 0.8;
+                    break;
+                case Mage:
+                    multiplier *= 1.3;
+                    break;
+                case Worker:
+                    multiplier *= 0.25;
+                    break;
+                case Factory:
+                    multiplier *= 0.9;
+                    break;
+                case Rocket:
+                    if (planet == Earth)
+                        multiplier *= 1.1;
+                    else
+                        multiplier *= 0.3;
+                    break;
+            }
             canShootAtMap.weights[x][y] = 1;
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
