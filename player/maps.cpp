@@ -23,5 +23,6 @@ PathfindingMap mageNearbyMap;
 PathfindingMap mageNearbyFuzzyMap;
 PathfindingMap ourStartingPositionMap;
 PathfindingMap discoveryMap;
+PathfindingMap distanceToInitialLocation[2];
 
 map<MapReuseObject, PathfindingMap> reusableMaps;

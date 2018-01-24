@@ -310,7 +310,7 @@ struct BotWorker : BotUnit {
                         }
                         double score = factor * (state.totalUnitCount - state.typeCount[Worker]*0.9 - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
                         score -= karboniteMap.weights[x][y] * 0.001;
-                        score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y] + enemyNearbyMap.weights[x][y]) * 0.001;
+                        score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y] + enemyNearbyMap.weights[x][y] * 0.01) * 0.001;
                         macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
                             if(gc.can_blueprint(id, Rocket, d)){
                                 gc.blueprint(id, Rocket, d);
@@ -321,7 +321,7 @@ struct BotWorker : BotUnit {
             }
         }
 
-        if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0 || state.typeCount[Worker] < 8) && replicateScore > bestMacroObjectScore - 0.1) {
+        if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0 || state.typeCount[Worker] < 8 || gc.get_round() > 740) && replicateScore > bestMacroObjectScore - 0.1) {
             auto nextLocation = getNextLocation(unitMapLocation, false);
 
             if (nextLocation != unitMapLocation) {
@@ -993,6 +993,49 @@ void updateDiscoveryMap() {
     }
 }
 
+void computeDistancesToInitialLocations() {
+    assert(planet == Earth);
+    auto&& initial_units = gc.get_starting_planet(Earth).get_initial_units();
+    for (int team = 0; team < 2; ++team) {
+        distanceToInitialLocation[team] = PathfindingMap(w, h);
+        distanceToInitialLocation[team] += 1000;
+        queue<pair<int, int> > bfsQueue;
+        for (auto& unit : initial_units) {
+            if (!unit.get_location().is_on_map())
+                continue;
+            if (unit.get_team() == team) {
+                auto pos = unit.get_location().get_map_location();
+                int x = pos.get_x();
+                int y = pos.get_y();
+                distanceToInitialLocation[team].weights[x][y] = 0;
+                bfsQueue.push(make_pair(x, y));
+
+            }
+        }
+        while(!bfsQueue.empty()) {
+            auto cur = bfsQueue.front();
+            bfsQueue.pop();
+            int x = cur.first;
+            int y = cur.second;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                        continue;
+                    if (passableMap.weights[nx][ny] > 1000)
+                        continue;
+                    int newDis = distanceToInitialLocation[team].weights[x][y] + 1;
+                    if (newDis < distanceToInitialLocation[team].weights[nx][ny]) {
+                        distanceToInitialLocation[team].weights[nx][ny] = newDis;
+                        bfsQueue.push(make_pair(nx, ny));
+                    }
+                }
+            }
+        }
+    }
+}
+
 // NOTE: this call also updates enemy position map for some reason
 void updateKarboniteMap() {
     for (int i = 0; i < w; i++) {
@@ -1002,6 +1045,10 @@ void updateKarboniteMap() {
                     const MapLocation location(planet, i, j);
                     int karbonite = gc.get_karbonite_at(location);
                     karboniteMap.weights[i][j] = karbonite;
+                    if (planet == Earth && distanceToInitialLocation[ourTeam].weights[i][j] > 200) {
+                        // The karbonite is pretty much unreachable, so let's ignore it
+                        karboniteMap.weights[i][j] = 0;
+                    }
                 }
                 enemyPositionMap.weights[i][j] = 0;
             }
@@ -1023,6 +1070,19 @@ void updateKarboniteMap() {
                         fuzzyKarboniteMap.weights[i][j] = max(fuzzyKarboniteMap.weights[i][j], kar);
                     }
                 }
+            }
+            if (planet == Earth) {
+                int disDiff = distanceToInitialLocation[ourTeam].weights[i][j] - distanceToInitialLocation[enemyTeam].weights[i][j];
+                if (disDiff <= 6) {
+                    fuzzyKarboniteMap.weights[i][j] *= 1.4;
+                }
+                if (disDiff <= 0) {
+                    fuzzyKarboniteMap.weights[i][j] *= 1.2;
+                }
+                if (disDiff <= -3) {
+                    fuzzyKarboniteMap.weights[i][j] *= 1.1;
+                }
+                fuzzyKarboniteMap.weights[i][j] /= 1.0 + workerProximityMap.weights[i][j];
             }
         }
     }
@@ -1187,7 +1247,7 @@ void updateDamagedStructuresMap() {
                         if (workersNextToMap.weights[unitX][unitY] >= 5) {
                             score /= 1 + 0.05 + workersNextToMap.weights[unitX][unitY];
                         }
-                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 3 * (1.5 + remainingLife));
+                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 6 * (1.5 + 0.5 * remainingLife));
                     }
                 }
             }
@@ -1798,6 +1858,7 @@ int main() {
     updatePassableMap();
     discoveryMap = PathfindingMap(w, h);
     if (planet == Earth) {
+        computeDistancesToInitialLocations();
         mapConnectedness = computeConnectedness();
         existsPathToEnemy = mapConnectedness > 0;
         if (!existsPathToEnemy) {
@@ -1856,9 +1917,9 @@ int main() {
         updateNearbyFriendMap();
 
         // NOTE: this call also updates enemy position map for some reason
+        updateWorkerMaps();
         updateKarboniteMap();
         updateEnemyInfluenceMaps();
-        updateWorkerMaps();
         updateMageNearbyMap();
         updateStructureProximityMap();
         updateDamagedStructuresMap();

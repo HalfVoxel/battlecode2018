@@ -24,6 +24,7 @@ extern PathfindingMap mageNearbyMap;
 extern PathfindingMap mageNearbyFuzzyMap;
 extern PathfindingMap ourStartingPositionMap;
 extern PathfindingMap discoveryMap;
+extern PathfindingMap distanceToInitialLocation[2];
 
 enum class MapType { Target, Cost };
 
