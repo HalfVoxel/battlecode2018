@@ -161,6 +161,7 @@ struct BotWorker : BotUnit {
                     }
                 }
             }
+            targetMap /= rocketHazardMap + 0.1;
             reusableMaps[reuseObject] = targetMap;
         }
 
@@ -180,7 +181,7 @@ struct BotWorker : BotUnit {
             return reusableMaps[reuseObject];
         }
         else {
-            auto costMap = (((passableMap) * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap + structureProximityMap + rocketHazardMap * 1000.0;
+            auto costMap = (((passableMap) * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap + structureProximityMap + rocketHazardMap * 10.0;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
@@ -476,7 +477,7 @@ struct BotHealer : BotUnit {
                 }
             }
 
-            auto costMap = passableMap + healerProximityMap + enemyInfluenceMap + rocketHazardMap * 1000.0;
+            auto costMap = passableMap + healerProximityMap + enemyInfluenceMap + rocketHazardMap * 10.0;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
@@ -721,13 +722,22 @@ void selectTravellersForRocket(Unit& unit) {
             auto uLocation = u.get_location().get_map_location();
             int dx = uLocation.get_x() - unitLocation.get_x();
             int dy = uLocation.get_y() - unitLocation.get_y();
-            candidates.emplace_back(dx*dx + dy*dy, u.get_id());
+            double penalty = dx*dx + dy*dy;
+            if (u.get_unit_type() == Worker) {
+                if (launchedWorkerCount) {
+                    penalty += 5000;
+                }
+                else {
+                    penalty /= 4;
+                }
+            }
+            candidates.emplace_back(penalty, u.get_id());
         }
     }
     sort(candidates.begin(), candidates.end());
     for (int i = 0; i < min((int) candidates.size(), remainingTravellers); i++) {
         if (gc.get_unit(candidates[i].second).get_unit_type() == Worker) {
-            if (hasWorker) {
+            if (hasWorker && launchedWorkerCount) {
                 continue;
             }
             hasWorker = true;
@@ -844,9 +854,13 @@ struct Researcher {
                 break;
             case 1:
                 scores[Rocket] = 6;
+                if (gc.get_round() > 630)
+                    scores[Rocket] = 0.01;
                 break;
             case 2:
                 scores[Rocket] = 6;
+                if (gc.get_round() > 630)
+                    scores[Rocket] = 0.01;
                 break;
         }
 
@@ -1047,7 +1061,7 @@ void updateKarboniteMap() {
                     karboniteMap.weights[i][j] = karbonite;
                     if (planet == Earth && distanceToInitialLocation[ourTeam].weights[i][j] > 200) {
                         // The karbonite is pretty much unreachable, so let's ignore it
-                        karboniteMap.weights[i][j] = 0;
+                        karboniteMap.weights[i][j] = 0.01;
                     }
                 }
                 enemyPositionMap.weights[i][j] = 0;
@@ -1072,7 +1086,7 @@ void updateKarboniteMap() {
                 }
             }
             if (planet == Earth) {
-                int disDiff = distanceToInitialLocation[ourTeam].weights[i][j] - distanceToInitialLocation[enemyTeam].weights[i][j];
+                int disDiff = distanceToInitialLocation[enemyTeam].weights[i][j] - distanceToInitialLocation[ourTeam].weights[i][j];
                 if (disDiff <= 6) {
                     fuzzyKarboniteMap.weights[i][j] *= 1.4;
                 }
@@ -1322,23 +1336,49 @@ void updateStuckUnitMap() {
 
 void updateRocketHazardMap() {
     rocketHazardMap = PathfindingMap(w, h);
-    auto rocketLandingInfo = gc.get_rocket_landings();
-    for (unsigned int round = gc.get_round(); round < gc.get_round() + 10; ++round) {
-        const auto rocketLandings = rocketLandingInfo.get_landings_on_round(round);
-        for (const auto& landing : rocketLandings) {
-            const auto& destination = landing.get_destination();
-            int x = destination.get_x();
-            int y = destination.get_y();
-            for (int dx = -1; dx <= 1; ++dx) {
-                for (int dy = -1; dy <= 1; ++dy) {
-                    int nx = x + dx;
-                    int ny = y + dy;
-                    if (nx < 0 || ny < 0 || nx >= w || ny >= h)
-                        continue;
-                    rocketHazardMap.weights[nx][ny] += 0.5;
+    if (planet == Mars) {
+        auto rocketLandingInfo = gc.get_rocket_landings();
+        for (unsigned int round = gc.get_round(); round < gc.get_round() + 10; ++round) {
+            const auto rocketLandings = rocketLandingInfo.get_landings_on_round(round);
+            for (const auto& landing : rocketLandings) {
+                const auto& destination = landing.get_destination();
+                int x = destination.get_x();
+                int y = destination.get_y();
+                for (int dx = -1; dx <= 1; ++dx) {
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                            continue;
+                        rocketHazardMap.weights[nx][ny] += 0.5;
+                    }
+                }
+                rocketHazardMap.weights[x][y] += 1;
+            }
+        }
+    }
+    else {
+        for (auto& u : ourUnits) {
+            if (u.get_location().is_on_map()) {
+                if (u.get_unit_type() == Rocket) {
+                    if (u.structure_is_built()) {
+                        auto pos = u.get_location().get_map_location();
+                        int x = pos.get_x();
+                        int y = pos.get_y();
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            for (int dy = -1; dy <= 1; ++dy) {
+                                if (dx == 0 && dy == 0)
+                                    continue;
+                                int nx = x + dx;
+                                int ny = y + dy;
+                                if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                                    continue;
+                                rocketHazardMap.weights[nx][ny] += 1;
+                            }
+                        }
+                    }
                 }
             }
-            rocketHazardMap.weights[x][y] += 1;
         }
     }
 }
@@ -1702,6 +1742,10 @@ void coordinateMageAttacks() {
             for (int y = 0; y < h; ++y) {
                 if (targetMap.weights[x][y] > 0 && distanceToMage.weights[x][y] > 0 && distanceToMage.weights[x][y] < 1000) {
                     double score = targetMap.weights[x][y] / (distanceToMage.weights[x][y]);
+                    if (healerMap.weights[x][y] > 0)
+                        score *= 1.2;
+                    if (healerMap.weights[x][y] > 1)
+                        score *= 1.1;
                     if (score < 0.6)
                         continue;
                     bestTargets.emplace_back(score, make_pair(x, y));
@@ -1876,9 +1920,6 @@ int main() {
     h = planetMap->get_height();
     initKarboniteMap();
     initInfluence();
-    if (planet == Earth) {
-        rocketHazardMap = PathfindingMap(w, h);
-    }
 
     computeOurStartingPositionMap();
     updatePassableMap();
@@ -1950,10 +1991,8 @@ int main() {
         updateStructureProximityMap();
         updateDamagedStructuresMap();
 
-        if (planet == Mars) {
-            updateRocketHazardMap();
-        }
-        else {
+        updateRocketHazardMap();
+        if (planet == Earth) {
             updateRocketAttractionMap();
         }
 

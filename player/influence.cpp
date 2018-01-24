@@ -183,7 +183,7 @@ void initInfluence() {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
             rocketProximityInfluence[dx+r][dy+r] = 0.1 / (1.0 + dis2);
-            if (dis2 == 1) {
+            if (dis2 <= 2) {
                 rocketProximityInfluence[dx+r][dy+r] = 0.2;
             }
         }
