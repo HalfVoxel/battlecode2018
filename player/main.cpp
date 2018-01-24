@@ -297,14 +297,18 @@ struct BotWorker : BotUnit {
                         if (mapConnectedness == 0) {
                             factor += 0.2;
                         }
-                        // 1 or 2 paths to the enemy, will be hard to invade
-                        if (mapConnectedness <= 2) {
+                        // 1 path to the enemy, will be hard to invade
+                        if (mapConnectedness == 1) {
                             factor += 0.01;
+                        }
+                        // 2 paths to the enemy, will be hard to invade
+                        if (mapConnectedness == 2) {
+                            factor += 0.002;
                         }
                         if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 70 && averageAttackerSuccessRate < 0.02)) {
                             factor += 0.1;
                         }
-                        double score = factor * (state.totalUnitCount - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
+                        double score = factor * (state.totalUnitCount - state.typeCount[Worker]*0.9 - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
                         score -= karboniteMap.weights[x][y] * 0.001;
                         score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y] + enemyNearbyMap.weights[x][y]) * 0.001;
                         macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
@@ -816,10 +820,10 @@ struct Researcher {
                 }
 
                 scores[Rocket] = 7;
-                if (state.typeCount[Ranger] > 100) {
+                if (state.typeCount[Knight] + state.typeCount[Mage] + state.typeCount[Ranger] > 100) {
                     scores[Rocket] += 200;
                 }
-                if (gc.get_round() > 55 && (averageAttackerSuccessRate < 0.001 || turnsSinceLastFight > 20)) {
+                if (gc.get_round() > 150 && (averageAttackerSuccessRate < 0.001 || turnsSinceLastFight > 20)) {
                     scores[Rocket] += 200;
                 }
                 if (!existsPathToEnemy) {
@@ -829,8 +833,12 @@ struct Researcher {
                     scores[Rocket] += 30;
                 }
                 // Few paths to the enemy. Will be hard to invade on earth
-                if (mapConnectedness <= 2) {
+                if (mapConnectedness == 1) {
                     scores[Rocket] += 10;
+                }
+                // Few paths to the enemy. Will be hard to invade on earth
+                if (mapConnectedness == 2) {
+                    scores[Rocket] += 1.5;
                 }
                 break;
             case 1:
@@ -840,7 +848,9 @@ struct Researcher {
                 scores[Rocket] = 6;
                 break;
         }
-        if (gc.get_round() > 645) {
+
+        // Don't get rockets if we won't have time to use them before the flood anyway
+        if (gc.get_round() > 750 - 100 - 5) {
             scores[Rocket] = 0.01;
         }
 
