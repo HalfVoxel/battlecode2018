@@ -92,7 +92,7 @@ vector<MacroObject> macroObjects;
 // Returns score for factory placement
 // Will be on the order of magnitude of 1 for a well placed factory
 // May be negative, but mostly in the [0,1] range
-double factoryPlacementScore(int x, int y) {
+double structurePlacementScore(int x, int y, UnitType unitType) {
     double nearbyTileScore = 0;
     for (int dx = -1; dx <= 1; dx++) {
         for (int dy = -1; dy <= 1; dy++) {
@@ -111,19 +111,26 @@ double factoryPlacementScore(int x, int y) {
     assert(nearbyTileScore >= 0);
 
     auto pos = MapLocation(Earth, x, y);
-    auto factories = gc.sense_nearby_units_by_type(pos, 4*4, Factory);
-
-    // Number of factories at a distance in the range (sqrt(2), 4]
-    double nearbyFactories = 0;
-    for (auto& f : factories) {
-        if (f.get_team() == ourTeam && f.get_map_location().distance_squared_to(pos) > 2) nearbyFactories++;
-    }
 
     // nearbyTileScore will be approximately 1 if there are 8 free tiles around the factory.
 
     double score = nearbyTileScore;
     // Score will go to zero when there is more than 50 karbonite on the tile
     score -= karboniteMap.weights[x][y] / 50.0;
+
+    auto nearbyUnits = gc.sense_nearby_units(pos, 2);
+    double nearbyStructures = 0;
+    for (auto& f : nearbyUnits) {
+        if (f.get_team() == ourTeam && (f.get_unit_type() == Rocket || f.get_unit_type() == Factory)) 
+            nearbyStructures++;
+    }
+
+    if (unitType == Rocket) {
+        score /= nearbyStructures + 1.0;
+    }
+    else {
+        score /= nearbyStructures * 0.3 + 1.0;
+    }
 
     // We like building factories in clusters (with some spacing)
     //if (nearbyFactories > 1) score *= 1.2f;
@@ -181,7 +188,7 @@ struct BotWorker : BotUnit {
             return reusableMaps[reuseObject];
         }
         else {
-            auto costMap = (((passableMap) * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap + structureProximityMap + rocketHazardMap * 10.0;
+            auto costMap = (((passableMap) * 50.0)/(fuzzyKarboniteMap + 50.0)) + enemyNearbyMap + enemyInfluenceMap + workerProximityMap + structureProximityMap + rocketHazardMap * 50.0;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
@@ -277,7 +284,7 @@ struct BotWorker : BotUnit {
                     if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 400 > state.remainingKarboniteOnEarth)
                         score = 0;
 
-                    score *= factoryPlacementScore(x, y);
+                    score *= structurePlacementScore(x, y, Factory);
 
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Factory), 2, [=]{
                         if (lastFactoryBlueprintTurn != (int)gc.get_round() && gc.can_blueprint(id, Factory, d)) {
@@ -312,6 +319,7 @@ struct BotWorker : BotUnit {
                         double score = factor * (state.totalUnitCount - state.typeCount[Worker]*0.9 - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
                         score -= karboniteMap.weights[x][y] * 0.001;
                         score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y] + enemyNearbyMap.weights[x][y] * 0.01) * 0.001;
+                        score *= structurePlacementScore(x, y, Rocket);
                         macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
                             if(gc.can_blueprint(id, Rocket, d)){
                                 gc.blueprint(id, Rocket, d);
@@ -441,6 +449,7 @@ struct BotHealer : BotUnit {
                 targetMap += healerOverchargeMap * 10;
             }
             targetMap /= (enemyNearbyMap + stuckUnitMap + 1.0);
+            targetMap /= rocketHazardMap + 0.1;
             reusableMaps[reuseObject] = targetMap;
         }
 
@@ -1300,7 +1309,12 @@ void updatePassableMap() {
                 passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
             }
             else {
-                passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1.5;
+                if (unit.structure_is_built()) {
+                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1.5;
+                }
+                else {
+                    passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1000;
+                }
             }
         }
     }
@@ -1616,7 +1630,7 @@ void coordinateMageAttacks() {
                     if (planet == Earth)
                         multiplier *= 1.1;
                     else
-                        multiplier *= 0.3;
+                        multiplier *= 0.01;
                     break;
             }
             canShootAtMap.weights[x][y] = 1;
