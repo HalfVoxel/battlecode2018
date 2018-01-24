@@ -189,10 +189,10 @@ def printResult(result, switch):
     if size is None:
         size = ('?','?')
 
-    teamStr = (greenStr if team == "A" else redStr) + team + reset
-
     if switch:
         team = "B" if team == "A" else "A"
+
+    teamStr = (greenStr if team == "A" else redStr) + team + reset
 
     mapStr = yellowStr + mapName.ljust(18) + reset + " " + (str(size[0]) + "x" + str(size[1])).ljust(5) + "   " + ("B vs A" if switch else "A vs B") + ": "
 
@@ -239,7 +239,11 @@ def run_tournament_part(teamA, teamB, dnaA, dnaB, switch, seed, maps):
 
         printResult(result, switch)
 
-        yield result[0] == "A"
+        team = result[0]
+        if switch:
+            team = "B" if team == "A" else "A"
+
+        yield team == "A"
 
 
 def parallel(chains):
