@@ -29,7 +29,6 @@ if [ "$BC_DEPLOY" = '2' ]; then
     echo starting $COMMIT_HASH
 elif [ "$BC_DEPLOY" = '1' ]; then
     step $DEPLOY_CC everything.cpp -c $INCLUDES
-    step $DEPLOY_CC everything.o -o main $LIBRARIES
 else
     step g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
 fi
