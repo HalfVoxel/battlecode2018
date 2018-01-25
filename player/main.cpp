@@ -137,7 +137,7 @@ double structurePlacementScore(int x, int y, UnitType unitType) {
     //else if (nearbyFactories > 0) score *= 1.1f;
 
     // enemyNearbyMap is 1 at enemies and falls of slowly
-    // score -= enemyNearbyMap.weights[x][y];
+    score /= enemyNearbyMap.weights[x][y] + 1.0;
     return score;
 }
 
@@ -616,20 +616,23 @@ struct BotFactory : BotUnit {
         }
 
         if (!unit.is_factory_producing()) {
-            {
+            if (existsPathToEnemy){
                 double score = 1;
                 const auto& location = unit.get_location().get_map_location();
                 double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
-                if (nearbyEnemiesWeight > 0.8)
-                    score += 5;
-                if (nearbyEnemiesWeight > 0.9) {
-                    score += 5;
-                    if (gc.get_round() < 100)
-                        score += 30;
-                }
-                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 15 && gc.get_round() < 40)
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 15 && gc.get_round() < 50)
                     score += 20;
                 score /= state.typeCount[Knight] + 1.0;
+                if (nearbyEnemiesWeight > 0.7)
+                    score += 0.1;
+                if (nearbyEnemiesWeight > 0.8)
+                    score += 0.4;
+                if (nearbyEnemiesWeight > 0.9) {
+                    score += 1;
+                    if (gc.get_round() < 100)
+                        score += 1;
+                }
+                score += 30 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
                     if (gc.can_produce_robot(id, Knight)) {
                         gc.produce_robot(id, Knight);
@@ -1120,6 +1123,7 @@ void updateKarboniteMap() {
 void updateEnemyInfluenceMaps(){
     enemyInfluenceMap = PathfindingMap(w, h);
     enemyNearbyMap = PathfindingMap(w, h);
+    enemyFactoryNearbyMap = PathfindingMap(w, h);
     healerOverchargeMap = PathfindingMap(w, h);
     enemyExactPositionMap = PathfindingMap(w, h);
     for (auto& u : enemyUnits) {
@@ -1138,6 +1142,7 @@ void updateEnemyInfluenceMaps(){
             enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
             enemyExactPositionMap.weights[pos.get_x()][pos.get_y()] = 1;
             healerOverchargeMap.maxInfluence(healerOverchargeInfluence, pos.get_x(), pos.get_y());
+            enemyFactoryNearbyMap.maxInfluence(enemyFactoryNearbyInfluence, pos.get_x(), pos.get_y());
         }
     }
 

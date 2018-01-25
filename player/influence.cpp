@@ -23,6 +23,9 @@ vector<vector<double> > workerProximityInfluence;
 vector<vector<double> > factoryProximityInfluence;
 vector<vector<double> > rocketProximityInfluence;
 vector<vector<double> > rangerProximityInfluence;
+vector<vector<double> > knightHideFromRangerInfluence;
+vector<vector<double> > knightHideFromKnightInfluence;
+vector<vector<double> > enemyFactoryNearbyInfluence;
 
 vector<vector<double>> calculate_uniform_disc_influence(int squared_radius) {
     int r = (int)ceil(sqrt(squared_radius));
@@ -110,6 +113,34 @@ void initInfluence() {
     knightTargetInfluence = calculate_uniform_disc_influence(2);
     enemyKnightTargetInfluence = calculate_rough_disc_influence(2);
     
+    r = 3;
+    knightHideFromRangerInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dis2 == 1)
+                knightHideFromRangerInfluence[dx+r][dy+r] = 0.1;
+            else if (dis2 == 2)
+                knightHideFromRangerInfluence[dx+r][dy+r] = 0.09;
+            else if (dis2 == 4)
+                knightHideFromRangerInfluence[dx+r][dy+r] = 0.08;
+            else if (dis2 <= 10)
+                knightHideFromRangerInfluence[dx+r][dy+r] = 0.05;
+        }
+    }
+    
+    r = 2;
+    knightHideFromKnightInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int maxDis = max(abs(dx), abs(dy));
+            if (maxDis == 1)
+                knightHideFromKnightInfluence[dx+r][dy+r] = 1.5;
+            if (maxDis == 2)
+                knightHideFromKnightInfluence[dx+r][dy+r] = 1.0;
+        }
+    }
+    
     r = 7;
     mageNearbyFuzzyInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
     for (int dx = -r; dx <= r; ++dx) {
@@ -174,6 +205,15 @@ void initInfluence() {
             if (dis2 == 0) {
                 factoryProximityInfluence[dx+r][dy+r] = 5;
             }
+        }
+    }
+    
+    r = 8;
+    enemyFactoryNearbyInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            enemyFactoryNearbyInfluence[dx+r][dy+r] = 1.0 / (1.0 + dis2);
         }
     }
     

@@ -11,6 +11,7 @@ PathfindingMap structureProximityMap;
 PathfindingMap damagedStructureMap;
 PathfindingMap passableMap;
 PathfindingMap enemyNearbyMap;
+PathfindingMap enemyFactoryNearbyMap;
 PathfindingMap enemyPositionMap;
 PathfindingMap enemyExactPositionMap;
 PathfindingMap nearbyFriendMap;

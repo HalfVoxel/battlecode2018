@@ -12,6 +12,7 @@ extern PathfindingMap structureProximityMap;
 extern PathfindingMap damagedStructureMap;
 extern PathfindingMap passableMap;
 extern PathfindingMap enemyNearbyMap;
+extern PathfindingMap enemyFactoryNearbyMap;
 extern PathfindingMap enemyPositionMap;
 extern PathfindingMap enemyExactPositionMap;
 extern PathfindingMap nearbyFriendMap;

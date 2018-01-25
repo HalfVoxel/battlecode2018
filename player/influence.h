@@ -17,5 +17,8 @@ extern std::vector<std::vector<double> > workerProximityInfluence;
 extern std::vector<std::vector<double> > factoryProximityInfluence;
 extern std::vector<std::vector<double> > rocketProximityInfluence;
 extern std::vector<std::vector<double> > rangerProximityInfluence;
+extern std::vector<std::vector<double> > knightHideFromRangerInfluence;
+extern std::vector<std::vector<double> > knightHideFromKnightInfluence;
+extern std::vector<std::vector<double> > enemyFactoryNearbyInfluence;
 
 void initInfluence();

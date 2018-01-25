@@ -280,7 +280,7 @@ void attack_all_in_range(const Unit& unit) {
     const auto nearby = gc.sense_nearby_units(locus, attackRange);
 
     const Unit* best_unit = nullptr;
-    float totalWeight = 0;
+    //float totalWeight = 0;
 
     auto low_health = unit.get_health() / (float)unit.get_max_health() < 0.8f;
     auto& values = low_health ? unit_defensive_strategic_value : unit_strategic_value;
@@ -290,6 +290,8 @@ void attack_all_in_range(const Unit& unit) {
         if (place.get_team() == unit.get_team())
             nearbyFriendly++;
     }
+    
+    float bestValue = 0;
 
     for (auto& place : nearby) {
         if (place.get_health() <= 0) continue;
@@ -303,14 +305,17 @@ void attack_all_in_range(const Unit& unit) {
         if (nearbyFriendly <= 2 && place.get_unit_type() == Mage)
             value -= 2;
         value /= (fractional_health + 0.3);
-        value *= value;
-        value *= value;
 
-        // Reservoir sampling
-        totalWeight += value;
-        if (((rand() % 100000)/100000.0f) * totalWeight <= value) {
+        if (value > bestValue) {
+            bestValue = value;
             best_unit = &place;
         }
+
+        // Reservoir sampling
+        /*totalWeight += value;
+        if (((rand() % 100000)/100000.0f) * totalWeight <= value) {
+            best_unit = &place;
+        }*/
     }
 
     int attackSuccessful = 0;
@@ -351,7 +356,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     double factor = 1;
                     switch (enemy.get_unit_type()) {
                         case Worker:
-                            factor = 0.2;
+                            factor = 0.1;
                             break;
                         case Ranger:
                             factor = 2.0;
@@ -360,10 +365,10 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                             factor = 2.0;
                             break;
                         case Knight:
-                            factor = 0.5;
+                            factor = 0.8;
                             break;
                         case Healer:
-                            factor = 0.8;
+                            factor = 0.9;
                             break;
                         case Factory:
                             factor = 0.6;
@@ -372,7 +377,19 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                             factor = 0.4;
                             break;
                     }
+                    factor *= 1.4 - 0.5 * enemy.get_health() / (0.0 + enemy.get_max_health());
                     targetMap.maxInfluenceMultiple(knightTargetInfluence, pos.get_x(), pos.get_y(), factor);
+                }
+            }
+        }
+
+        if (unit.get_unit_type() == Knight) {
+            for (auto& enemy : enemyUnits) {
+                if (enemy.get_location().is_on_map()) {
+                    auto pos = enemy.get_location().get_map_location();
+                    if (enemy.get_unit_type() == Ranger) {
+                        targetMap.addInfluence(knightHideFromRangerInfluence, pos.get_x(), pos.get_y());
+                    }
                 }
             }
         }
@@ -435,6 +452,14 @@ PathfindingMap BotUnit::defaultMilitaryCostMap () {
     else {
         if (unit.get_unit_type() == Knight) {
             auto costMap = passableMap + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
+            for (auto& enemy : enemyUnits) {
+                if (enemy.get_location().is_on_map()) {
+                    auto pos = enemy.get_location().get_map_location();
+                    if(enemy.get_unit_type() == Knight) {
+                        costMap.addInfluence(knightHideFromKnightInfluence, pos.get_x(), pos.get_y());
+                    }
+                }
+            }
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
