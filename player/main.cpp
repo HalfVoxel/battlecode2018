@@ -28,6 +28,7 @@ double bestMacroObjectScore;
 bool existsPathToEnemy;
 int lastFactoryBlueprintTurn = -1;
 int turnsSinceLastFight;
+bool workersMove;
 
 // True if mars has any landing spots (i.e does mars have any traversable ground)
 bool anyReasonableLandingSpotOnInitialMars;
@@ -201,11 +202,13 @@ struct BotWorker : BotUnit {
             return;
         }
 
-        hasDoneTick = true;
+        if (workersMove) {
+            hasDoneTick = true;
+        }
 
         auto unitMapLocation = unit.get_location().get_map_location();
 
-        if (gc.is_move_ready(unit.get_id())) {
+        if (workersMove && gc.is_move_ready(unit.get_id())) {
             unitMapLocation = getNextLocation();
             moveToLocation(unitMapLocation);
         }
@@ -227,6 +230,7 @@ struct BotWorker : BotUnit {
                 double score = (place.get_health() / (0.0 + place.get_max_health()));
                 macroObjects.emplace_back(score, 0, 1, [=]{
                     if(gc.can_build(id, placeId)) {
+                        cout << "Building" << endl;
                         didBuild = true;
                         gc.build(id, placeId);
                     }
@@ -262,6 +266,8 @@ struct BotWorker : BotUnit {
             macroObjects.emplace_back(1, 0, 0, [=]{
                 if (gc.can_harvest(id, dir)) {
                     gc.harvest(id, dir);
+                    auto pos = unitMapLocation.add(dir);
+                    karboniteMap.weights[pos.get_x()][pos.get_y()] = gc.get_karbonite_at(pos);
                 }
             });
         }
@@ -1085,7 +1091,9 @@ void updateKarboniteMap() {
             }
         }
     }
+}
 
+void updateFuzzyKarboniteMap() {
     fuzzyKarboniteMap = PathfindingMap(w, h);
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
@@ -2010,6 +2018,7 @@ int main() {
         // NOTE: this call also updates enemy position map for some reason
         updateWorkerMaps();
         updateKarboniteMap();
+        updateFuzzyKarboniteMap();
         updateEnemyInfluenceMaps();
         updateMageNearbyMap();
         updateStructureProximityMap();
@@ -2050,22 +2059,37 @@ int main() {
         preprocessingComputationTime += t1-t0;
 
         bool firstIteration = true;
+        workersMove = false;
         while (true) {
             auto t2 = millis();
             createUnits();
             cout << "We have " << ourUnits.size() << " units" << endl;
             coordinateMageAttacks();
             bool anyTickDone = tickUnits(firstIteration, 1 << (int)Healer);
-            firstIteration = false;
 
             anyTickDone |= tickUnits(false);
             if (hasOvercharge) doOvercharge();
             auto t3 = millis();
             cout << "Iteration: " << (t3 - t2) << endl;
+            
+            executeMacroObjects();
+
+            if (firstIteration) {
+                workersMove = true;
+                updateFuzzyKarboniteMap();
+                findUnits();
+                createUnits();
+                updateDamagedStructuresMap();
+                MapReuseObject reuseObject(MapType::Target, Worker, false);
+                reusableMaps.erase(reuseObject);
+                reuseObject.isHurt = true;
+                reusableMaps.erase(reuseObject);
+                anyTickDone |= tickUnits(false, 1 << (int)Worker);
+                firstIteration = false;
+            }
 
             if (!anyTickDone) break;
 
-            executeMacroObjects();
             findUnits();
             // auto t4 = millis();
             // cout << "Execute: " << (t4 - t3) << endl;
