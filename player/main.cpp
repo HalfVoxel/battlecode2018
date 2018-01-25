@@ -1673,6 +1673,7 @@ void coordinateMageAttacks() {
         vector<vector<int> > minHealerSum(w, vector<int>(h));
         vector<vector<pair<int, int> > > distanceToMageParent(w, vector<pair<int, int>>(h, make_pair(-1, -1)));
         distanceToMage += 1000;
+        int damage = 0;
         queue<pair<int, int> > bfsQueue;
         for (auto& unit : ourUnits) {
             if (unit.get_unit_type() != Mage) {
@@ -1680,6 +1681,8 @@ void coordinateMageAttacks() {
             }
             if (!unit.get_location().is_on_map())
                 continue;
+            if (!damage)
+                damage = unit.get_damage();
             const auto& mapLocation = unit.get_location().get_map_location();
             int x = mapLocation.get_x();
             int y = mapLocation.get_y();
@@ -1725,6 +1728,8 @@ void coordinateMageAttacks() {
                     int ny = y+dy;
                     if (nx < 0 || ny < 0 || nx >= w || ny >= h)
                         continue;
+                    if (!canSenseLocation[nx][ny])
+                        continue;
                     if (passableMap.weights[nx][ny] > 1)
                         continue;
                     if (D < distanceToMage.weights[nx][ny]) {
@@ -1749,6 +1754,8 @@ void coordinateMageAttacks() {
                         int nx = x+dx;
                         int ny = y+dy;
                         if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                            continue;
+                        if (!canSenseLocation[nx][ny])
                             continue;
                         if (passableMap.weights[nx][ny] > 1)
                             continue;
@@ -1778,7 +1785,7 @@ void coordinateMageAttacks() {
                         score *= 1.2;
                     if (healerMap.weights[x][y] > 1)
                         score *= 1.1;
-                    if (score < 0.6)
+                    if (score < 80.0 / (damage + 50.0))
                         continue;
                     bestTargets.emplace_back(score, make_pair(x, y));
                 }

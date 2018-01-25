@@ -348,6 +348,9 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                 auto pos = enemy.get_location().get_map_location();
                 if (unit.get_unit_type() == Mage) {
                     targetMap.maxInfluence(mageTargetInfluence, pos.get_x(), pos.get_y());
+                    if (hasOvercharge) {
+                        targetMap.maxInfluence(mageToOverchargeInfluence, pos.get_x(), pos.get_y());
+                    }
                 }
                 else if (unit.get_unit_type() == Ranger) {
                     targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
@@ -404,7 +407,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
             }
         }
 
-        if (isHurt || unit.get_unit_type() == Mage) {
+        if (isHurt) {
             for (auto& u : ourUnits) {
                 if (u.get_unit_type() == Healer) {
                     if (!u.get_location().is_on_map()) {
@@ -463,8 +466,13 @@ PathfindingMap BotUnit::defaultMilitaryCostMap () {
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
-        else {
+        else if (unit.get_unit_type() == Ranger){
             auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
+            reusableMaps[reuseObject] = costMap;
+            return costMap;
+        }
+        else{
+            auto costMap = (passableMap + enemyInfluenceMap * 0.5) / (nearbyFriendMap * 0.3 + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }

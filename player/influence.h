@@ -20,5 +20,6 @@ extern std::vector<std::vector<double> > rangerProximityInfluence;
 extern std::vector<std::vector<double> > knightHideFromRangerInfluence;
 extern std::vector<std::vector<double> > knightHideFromKnightInfluence;
 extern std::vector<std::vector<double> > enemyFactoryNearbyInfluence;
+extern std::vector<std::vector<double> > mageToOverchargeInfluence;
 
 void initInfluence();
