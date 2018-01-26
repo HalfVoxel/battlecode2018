@@ -320,7 +320,7 @@ struct BotWorker : BotUnit {
                         if (mapConnectedness == 2) {
                             factor += 0.002;
                         }
-                        if (state.typeCount[Ranger] > 100 || (state.typeCount[Ranger] > 70 && averageAttackerSuccessRate < 0.02)) {
+                        if (state.typeCount[Ranger]+state.typeCount[Healer]+state.typeCount[Mage] > 120 || (state.typeCount[Ranger]+state.typeCount[Healer] > 80 && averageAttackerSuccessRate < 0.01) || (state.typeCount[Ranger]+state.typeCount[Healer] > 40 && turnsSinceLastFight > 30)) {
                             factor += 0.1;
                         }
                         double score = factor * (state.totalUnitCount - state.typeCount[Worker]*0.9 - state.typeCount[Factory] - 12 * state.typeCount[Rocket]);
@@ -630,6 +630,8 @@ struct BotFactory : BotUnit {
                 double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
                 if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 22 && gc.get_round() < 80)
                     score += 20;
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 26 && gc.get_round() < 100)
+                    score += 5;
                 score /= state.typeCount[Knight] + 1.0;
                 if (nearbyEnemiesWeight > 0.7)
                     score += 0.1;
