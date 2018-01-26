@@ -276,7 +276,7 @@ struct BotWorker : BotUnit {
 
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
         double replicateScore = karbonitePerWorker * 0.008 + 2.5 / (state.typeCount[Worker] + 0.1);
-        if (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth) {
+        if (state.typeCount[Worker] > 100 || (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth)) {
             replicateScore = -1;
         }
 
@@ -427,7 +427,16 @@ struct BotHealer : BotUnit {
             targetMap = reusableMaps[reuseObject];
         }
         else {
-            targetMap = enemyNearbyMap * 0.0001 + 0.001 - structureProximityMap * 0.001;
+            targetMap = PathfindingMap(w, h) + 0.001;
+            for (auto& u : enemyUnits) {
+                if (!u.get_location().is_on_map()) {
+                    continue;
+                }
+                if (is_robot(u.get_unit_type())) {
+                    auto uMapLocation = u.get_location().get_map_location();
+                    targetMap.maxInfluence(healerSafetyInfluence, uMapLocation.get_x(), uMapLocation.get_y());
+                }
+            }
             for (auto& u : ourUnits) {
                 if (!u.get_location().is_on_map()) {
                     continue;
@@ -437,7 +446,7 @@ struct BotHealer : BotUnit {
                         continue;
                     }
                     double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
-                    if (remainingLife == 1.0 && u.get_unit_type() != Mage) {
+                    if (remainingLife == 1.0) {
                         continue;
                     }
                     auto uMapLocation = u.get_location().get_map_location();
@@ -467,6 +476,7 @@ struct BotHealer : BotUnit {
                     targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 12 * (1.2 - remainingLife));
                 }
             }
+            targetMap += enemyNearbyMap * 0.0001 - structureProximityMap * 0.001;
             /*for (auto& u : ourUnits) {
                 if (!u.get_location().is_on_map()) {
                     continue;
@@ -693,9 +703,9 @@ struct BotFactory : BotUnit {
         }
 
         if (!unit.is_factory_producing()) {
+            const auto& location = unit.get_location().get_map_location();
             if (existsPathToEnemy){
                 double score = 1;
-                const auto& location = unit.get_location().get_map_location();
                 double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
                 if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 22 && gc.get_round() < 80)
                     score += 20;
@@ -712,6 +722,8 @@ struct BotFactory : BotUnit {
                         score += 1;
                 }
                 score += 30 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
+                if (gc.get_round() < 90)
+                    score += 15 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
                     if (gc.can_produce_robot(id, Knight)) {
                         gc.produce_robot(id, Knight);
@@ -745,7 +757,6 @@ struct BotFactory : BotUnit {
                 });
             }
             {
-                auto location = unit.get_location().get_map_location();
                 // Not even sure about this, but yeah. If a mage hit will on average hit 4 enemies, go for it (compare to ranger score of 2)
                 double score = splashDamagePotential * 0.5; // enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
                 if (hasOvercharge) {
@@ -908,16 +919,16 @@ struct Researcher {
         }
         switch(researchInfo.get_level(Worker)) {
             case 0:
-                scores[Worker] = 2;
+                scores[Worker] = 0.5;
                 break;
             case 1:
-                scores[Worker] = 1;
+                scores[Worker] = 0.5;
                 break;
             case 2:
-                scores[Worker] = 1;
+                scores[Worker] = 0.5;
                 break;
             case 3:
-                scores[Worker] = 1;
+                scores[Worker] = 0.5;
                 break;
         }
         switch(researchInfo.get_level(Rocket)) {
@@ -944,7 +955,7 @@ struct Researcher {
                 }
                 // Few paths to the enemy. Will be hard to invade on earth
                 if (mapConnectedness == 1) {
-                    scores[Rocket] += 10;
+                    scores[Rocket] += 5;
                 }
                 // Few paths to the enemy. Will be hard to invade on earth
                 if (mapConnectedness == 2) {

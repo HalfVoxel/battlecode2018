@@ -27,6 +27,7 @@ vector<vector<double> > knightHideFromRangerInfluence;
 vector<vector<double> > knightHideFromKnightInfluence;
 vector<vector<double> > enemyFactoryNearbyInfluence;
 vector<vector<double> > mageToOverchargeInfluence;
+vector<vector<double> > healerSafetyInfluence;
 
 vector<vector<double>> calculate_uniform_disc_influence(int squared_radius) {
     int r = (int)ceil(sqrt(squared_radius));
@@ -239,6 +240,18 @@ void initInfluence() {
                 mageToOverchargeInfluence[dx+r][dy+r] = 40.0 / dis2;
             else if (dx*dx+dy*dy > 50)
                 mageToOverchargeInfluence[dx+r][dy+r] = 0.4;
+        }
+    }
+
+    r = 10;
+    healerSafetyInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            if (dx*dx+dy*dy > 80)
+                healerSafetyInfluence[dx+r][dy+r] = 40.0 / dis2;
+            else if (dx*dx+dy*dy > 50)
+                healerSafetyInfluence[dx+r][dy+r] = 0.1;
         }
     }
 }
