@@ -943,7 +943,7 @@ struct Researcher {
                     break;
                 }
 
-                scores[Rocket] = 7;
+                scores[Rocket] = 4;
                 // if (state.typeCount[Knight] + state.typeCount[Mage] + state.typeCount[Ranger] > 150)
                 if (state.typeCount[Ranger] > 100) {
                     scores[Rocket] += 200;
@@ -959,7 +959,7 @@ struct Researcher {
                 }
                 // Few paths to the enemy. Will be hard to invade on earth
                 if (mapConnectedness == 1) {
-                    scores[Rocket] += 5;
+                    scores[Rocket] += 3.5;
                 }
                 // Few paths to the enemy. Will be hard to invade on earth
                 if (mapConnectedness == 2) {
