@@ -529,62 +529,63 @@ struct BotHealer : BotUnit {
 
         auto unitMapLocation = unit.get_location().get_map_location();
         bool succeededHealing = false;
-        int bestTargetId = -1;
-        double bestTargetRemainingLife = 1000;
-        for (auto& u : ourUnits) {
-            if (!u.get_location().is_on_map()) {
-                continue;
-            }
-            if (is_robot(u.get_unit_type())) {
-                if (u.get_id() == id) {
+        if (gc.is_heal_ready(id)) {
+            int bestTargetId = -1;
+            double bestTargetRemainingLife = 1000;
+            for (auto& u : ourUnits) {
+                if (!u.get_location().is_on_map()) {
                     continue;
                 }
-                double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
-                if (remainingLife == 1.0) {
-                    continue;
-                }
+                if (is_robot(u.get_unit_type())) {
+                    double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
+                    if (remainingLife == 1.0) {
+                        continue;
+                    }
 
-                double factor = 1;
-                switch (u.get_unit_type()) {
-                    case Worker:
-                        factor = 0.1;
-                        break;
-                    case Mage:
-                        factor = 1.3;
-                        break;
-                    case Ranger:
-                        factor = 1.0;
-                        break;
-                    case Healer:
-                        factor = 1.2;
-                        break;
-                    case Knight:
-                        factor = 1.1;
-                        break;
-                    default:
-                        break;
-                }
-                remainingLife -= factor;
+                    double factor = 1;
+                    switch (u.get_unit_type()) {
+                        case Worker:
+                            factor = 0.1;
+                            break;
+                        case Mage:
+                            factor = 1.3;
+                            break;
+                        case Ranger:
+                            factor = 1.0;
+                            break;
+                        case Healer:
+                            factor = 1.2;
+                            break;
+                        case Knight:
+                            factor = 1.1;
+                            break;
+                        default:
+                            break;
+                    }
+                    remainingLife -= factor;
 
-                if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
-                    if (remainingLife < bestTargetRemainingLife) {
-                        bestTargetRemainingLife = remainingLife;
-                        bestTargetId = u.get_id();
+                    if (gc.can_heal(id, u.get_id())) {
+                        if (remainingLife < bestTargetRemainingLife) {
+                            bestTargetRemainingLife = remainingLife;
+                            bestTargetId = u.get_id();
+                        }
                     }
                 }
             }
-        }
-        if (bestTargetId != -1) {
-            gc.heal(id, bestTargetId);
-            invalidate_unit(bestTargetId);
-            invalidate_unit(id);
-            succeededHealing = true;
+            if (bestTargetId != -1) {
+                gc.heal(id, bestTargetId);
+                invalidate_unit(bestTargetId);
+                invalidate_unit(id);
+                succeededHealing = true;
+            }
         }
 
         auto nextLocation = getNextLocation();
         moveToLocation(nextLocation);
 
-        if(!succeededHealing) {
+        if(!succeededHealing && gc.is_heal_ready(id)) {
+            int bestTargetId = -1;
+            double bestTargetRemainingLife = 1000;
             for (auto& u : ourUnits) {
                 if (!u.get_location().is_on_map()) {
                     continue;
@@ -598,7 +599,29 @@ struct BotHealer : BotUnit {
                         continue;
                     }
 
-                    if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
+                    double factor = 1;
+                    switch (u.get_unit_type()) {
+                        case Worker:
+                            factor = 0.1;
+                            break;
+                        case Mage:
+                            factor = 1.3;
+                            break;
+                        case Ranger:
+                            factor = 1.0;
+                            break;
+                        case Healer:
+                            factor = 1.2;
+                            break;
+                        case Knight:
+                            factor = 1.1;
+                            break;
+                        default:
+                            break;
+                    }
+                    remainingLife -= factor;
+
+                    if (gc.can_heal(id, u.get_id())) {
                         if (remainingLife < bestTargetRemainingLife) {
                             bestTargetRemainingLife = remainingLife;
                             bestTargetId = u.get_id();

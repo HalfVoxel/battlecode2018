@@ -333,7 +333,7 @@ void attack_all_in_range(const Unit& unit) {
 }
 
 PathfindingMap BotUnit::defaultMilitaryTargetMap() {
-    bool isHurt = (unit.get_health() < 0.8 * unit.get_max_health());
+    bool isHurt = (unit.get_health() < 0.5 * unit.get_max_health());
     MapReuseObject reuseObject(MapType::Target, unit.get_unit_type(), isHurt);
 
     PathfindingMap targetMap;
@@ -448,6 +448,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     targetMap.addInfluenceMultiple(healerInfluence, pos.get_x(), pos.get_y(), factor);
                 }
             }
+            targetMap /= enemyInfluenceMap + 1.0;
         }
 
         for (auto& u : ourUnits) {
