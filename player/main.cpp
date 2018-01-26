@@ -8,6 +8,7 @@
 #include <iostream>
 #include <map>
 #include <stack>
+#include <set>
 
 #include "common.h"
 #include "pathfinding.hpp"
@@ -274,7 +275,7 @@ struct BotWorker : BotUnit {
         }
 
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
-        double replicateScore = karbonitePerWorker * 0.008 + 2 / (state.typeCount[Worker] + 0.1);
+        double replicateScore = karbonitePerWorker * 0.008 + 2.5 / (state.typeCount[Worker] + 0.1);
         if (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth) {
             replicateScore = -1;
         }
@@ -641,6 +642,7 @@ struct BotHealer : BotUnit {
     }
 
     void doOvercharge() {
+        return;
         if (hasOvercharge && unit.get_ability_heat() < 10 && unit.get_location().is_on_map()) {
             const auto& location = unit.get_location().get_map_location();
             if (mageNearbyMap.weights[location.get_x()][location.get_y()] > 0)
@@ -1678,6 +1680,79 @@ int computeConnectedness() {
 
 double mageCoordinationTime;
 
+void coordinateRangerAttacks() {
+    if (!hasOvercharge || !state.typeCount[Ranger]) {
+        return;
+    }
+    map<unsigned int, vector<unsigned int> > rangerTargets;
+    for (auto& unit : ourUnits) {
+        if (unit.get_unit_type() == Ranger && unit.get_location().is_on_map()) {
+            int attackRange = unit.get_attack_range();
+            const auto locus = unit.get_location().get_map_location();
+            int x = locus.get_x();
+            int y = locus.get_y();
+            if (!exists_enemy_in_range(x, y, attackRange)) {
+                continue;
+            }
+            const auto nearby = gc.sense_nearby_units(locus, attackRange);
+            vector<unsigned int> targets;
+            for (const auto& enemy : nearby) {
+                if (enemy.get_team() != unit.get_team() && enemy.get_unit_type() != Worker)
+                    targets.push_back(enemy.get_id());
+            }
+            rangerTargets[unit.get_id()] = targets;
+        }
+    }
+    map<unsigned int, set<int> > targetedBy;
+    map<pair<int, int>, int> shooter;
+    auto researchInfo = gc.get_research_info();
+    for (auto& unit : ourUnits) {
+        if (unit.get_unit_type() == Healer && unit.get_location().is_on_map()) {
+            if (unit.get_ability_heat() >= 10)
+                continue;
+            int attackRange = unit.get_ability_range();
+            const auto locus = unit.get_location().get_map_location();
+            if (mageNearbyMap.weights[locus.get_x()][locus.get_y()] > 0 && researchInfo.get_level(Mage) >= 3)
+                continue;
+            const auto nearby = gc.sense_nearby_units(locus, attackRange);
+            for (const auto& ranger : nearby) {
+                if (ranger.get_team() == unit.get_team() && ranger.get_unit_type() == Ranger) {
+                    for (const unsigned int enemyId : rangerTargets[ranger.get_id()]) {
+                        targetedBy[enemyId].insert(unit.get_id());
+                        shooter[make_pair(enemyId, unit.get_id())] = ranger.get_id();
+                    }
+                }
+            }
+        }
+    }
+    for (auto it : targetedBy) {
+        if (!gc.can_sense_unit(it.first))
+            continue;
+        cout << "Getting unit" << endl;
+        Unit unit = gc.get_unit(it.first);
+        unsigned int hitsRequired = ceil(unit.get_health() / 30.0);
+        if (it.second.size() >= hitsRequired) {
+            for (const auto& healerId : it.second) {
+                if (!gc.can_sense_unit(it.first))
+                    continue;
+                int rangerId = shooter[make_pair(it.first, healerId)];
+                cout << "Overcharging ranger!" << endl;
+                gc.overcharge(healerId, rangerId);
+                cout << "Attacking" << endl << endl;
+                gc.attack(rangerId, it.first);
+                cout << "Invalidating" << endl;
+                invalidate_unit(healerId);
+                invalidate_unit(rangerId);
+                cout << "Invalidated" << endl;
+                for (auto& it2 : targetedBy) {
+                    it2.second.erase(healerId);
+                }
+            }
+        }
+    }
+    cout << "Finished coordinating rangers" << endl;
+}
+
 void coordinateMageAttacks() {
     if (!hasOvercharge || !state.typeCount[Mage]) {
         return;
@@ -2168,6 +2243,7 @@ int main() {
                 anyTickDone |= tickUnits(false, 1 << (int)Worker);
                 firstIteration = false;
             }
+            coordinateRangerAttacks();
 
             if (!anyTickDone) break;
 
