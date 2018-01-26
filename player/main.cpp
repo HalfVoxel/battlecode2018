@@ -172,6 +172,7 @@ struct BotWorker : BotUnit {
                 }
             }
             targetMap /= rocketHazardMap + 0.1;
+            targetMap /= stuckUnitMap + 1.0;
             reusableMaps[reuseObject] = targetMap;
         }
 
@@ -288,7 +289,7 @@ struct BotWorker : BotUnit {
                 if(isOnMap(newLocation) && gc.can_sense_location(newLocation) && gc.is_occupiable(newLocation)) {
                     int x = newLocation.get_x();
                     int y = newLocation.get_y();
-                    double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
+                    double score = state.typeCount[Factory] < 4 ? (2.5 - 0.5 * state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
                     if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 800 > state.remainingKarboniteOnEarth)
                         score = 0;
 
@@ -1428,6 +1429,8 @@ void updateStuckUnitMap() {
     for (const auto& unit : ourUnits) {
         if (!unit.get_location().is_on_map())
             continue;
+        if (is_structure(unit.get_unit_type()) && !unit.structure_is_built())
+            continue;
         const auto& location = unit.get_location().get_map_location();
         int x = location.get_x();
         int y = location.get_y();
@@ -1742,22 +1745,39 @@ void coordinateRangerAttacks() {
     for (auto it : targetedBy) {
         if (!gc.can_sense_unit(it.first))
             continue;
-        cout << "Getting unit" << endl;
         Unit unit = gc.get_unit(it.first);
         unsigned int hitsRequired = ceil(unit.get_health() / 30.0);
         if (it.second.size() >= hitsRequired) {
             for (const auto& healerId : it.second) {
                 if (!gc.can_sense_unit(it.first))
                     continue;
+                if (!gc.can_sense_unit(healerId))
+                    continue;
                 int rangerId = shooter[make_pair(it.first, healerId)];
-                cout << "Overcharging ranger!" << endl;
+                if (!gc.can_sense_unit(rangerId))
+                    continue;
+                const auto healer = gc.get_unit(healerId);
+                if (!healer.get_location().is_on_map())
+                    continue;
+                const auto healerLocation = healer.get_location().get_map_location();
+                const auto ranger = gc.get_unit(rangerId);
+                if (!ranger.get_location().is_on_map())
+                    continue;
+                const auto rangerLocation = ranger.get_location().get_map_location();
+                int x1 = healerLocation.get_x();
+                int y1 = healerLocation.get_y();
+                int x2 = rangerLocation.get_x();
+                int y2 = rangerLocation.get_y();
+                int dx = x1-x2;
+                int dy = y1-y2;
+                if (dx*dx + dy*dy > 30)
+                    continue;
                 gc.overcharge(healerId, rangerId);
-                cout << "Attacking" << endl << endl;
-                gc.attack(rangerId, it.first);
-                cout << "Invalidating" << endl;
+                if (gc.can_attack(rangerId, it.first)) {
+                    gc.attack(rangerId, it.first);
+                }
                 invalidate_unit(healerId);
                 invalidate_unit(rangerId);
-                cout << "Invalidated" << endl;
                 for (auto& it2 : targetedBy) {
                     it2.second.erase(healerId);
                 }
