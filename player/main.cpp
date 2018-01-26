@@ -777,14 +777,17 @@ struct BotFactory : BotUnit {
                     if (state.typeCount[Ranger] >= 2) {
                         score += 3;
                     }
-                    if (state.typeCount[Ranger] >= 4) {
-                        score += 2.5;
+                    if (state.typeCount[Ranger] >= 3) {
+                        score += 2;
+                    }
+                    if (state.typeCount[Ranger] >= 5) {
+                        score += 3;
                     }
                     if (state.typeCount[Ranger] > 6) {
-                        score += state.typeCount[Ranger] * 0.9 + state.typeCount[Mage] * 0.7;
+                        score += state.typeCount[Ranger] * 1.2 + state.typeCount[Mage] * 0.7;
                     }
                     score /= state.typeCount[Healer];
-                    score += averageHealerSuccessRate * 1.8;
+                    score += averageHealerSuccessRate * 1.5;
                     if (hasOvercharge)
                         score += 1.0;
                     macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
