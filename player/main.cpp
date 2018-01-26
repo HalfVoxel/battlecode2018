@@ -27,6 +27,7 @@ bool hasBlink;
 double bestMacroObjectScore;
 bool existsPathToEnemy;
 int lastFactoryBlueprintTurn = -1;
+int lastRocketBlueprintTurn = -1;
 int turnsSinceLastFight;
 bool workersMove;
 
@@ -273,7 +274,7 @@ struct BotWorker : BotUnit {
         }
 
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
-        double replicateScore = karbonitePerWorker * 0.015 + 2.5 / state.typeCount[Worker];
+        double replicateScore = karbonitePerWorker * 0.008 + 2 / (state.typeCount[Worker] + 0.1);
         if (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth) {
             replicateScore = -1;
         }
@@ -287,7 +288,7 @@ struct BotWorker : BotUnit {
                     int x = newLocation.get_x();
                     int y = newLocation.get_y();
                     double score = state.typeCount[Factory] < 3 ? (3 - state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
-                    if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 400 > state.remainingKarboniteOnEarth)
+                    if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 800 > state.remainingKarboniteOnEarth)
                         score = 0;
 
                     score *= structurePlacementScore(x, y, Factory);
@@ -327,8 +328,9 @@ struct BotWorker : BotUnit {
                         score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y] + enemyNearbyMap.weights[x][y] * 0.01) * 0.001;
                         score *= structurePlacementScore(x, y, Rocket);
                         macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
-                            if(gc.can_blueprint(id, Rocket, d)){
+                            if(lastRocketBlueprintTurn != (int)gc.get_round() && gc.can_blueprint(id, Rocket, d)){
                                 gc.blueprint(id, Rocket, d);
+                                lastRocketBlueprintTurn = gc.get_round();
                             }
                         });
                     }
@@ -626,7 +628,7 @@ struct BotFactory : BotUnit {
                 double score = 1;
                 const auto& location = unit.get_location().get_map_location();
                 double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
-                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 15 && gc.get_round() < 50)
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 22 && gc.get_round() < 80)
                     score += 20;
                 score /= state.typeCount[Knight] + 1.0;
                 if (nearbyEnemiesWeight > 0.7)
@@ -635,7 +637,7 @@ struct BotFactory : BotUnit {
                     score += 0.4;
                 if (nearbyEnemiesWeight > 0.9) {
                     score += 1;
-                    if (gc.get_round() < 100)
+                    if (gc.get_round() < 120)
                         score += 1;
                 }
                 score += 30 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
@@ -659,11 +661,11 @@ struct BotFactory : BotUnit {
                 if (state.typeCount[Worker] == 0 && (researchInfo.get_level(Rocket) >= 1 || state.typeCount[Factory] < 3)) {
                     score += 10;
                 }
-                if (gc.get_round() > 600 && state.typeCount[Worker] < 10) {
+                if (gc.get_round() > 600 && state.typeCount[Worker] < 5) {
                     score += 500;
                 }
                 if (state.typeCount[Rocket] > 5) {
-                    score += 10;
+                    score += 20 / (state.typeCount[Worker] + 1.0);
                 }
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Worker), 2, [=] {
                     if (gc.can_produce_robot(id, Worker)) {
@@ -827,7 +829,7 @@ struct Researcher {
                 scores[Healer] = 8 + 1.0 * state.typeCount[Healer];
                 break;
             case 2:
-                scores[Healer] = 5 + 1.0 * state.typeCount[Healer];
+                scores[Healer] = 7 + 1.0 * state.typeCount[Healer];
                 break;
         }
         switch(researchInfo.get_level(Worker)) {

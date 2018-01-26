@@ -353,7 +353,31 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     }
                 }
                 else if (unit.get_unit_type() == Ranger) {
-                    targetMap.maxInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
+                    double factor = 1;
+                    switch (enemy.get_unit_type()) {
+                        case Worker:
+                            factor = 0.4;
+                            break;
+                        case Ranger:
+                            factor = 1.0;
+                            break;
+                        case Mage:
+                            factor = 1.5;
+                            break;
+                        case Knight:
+                            factor = 1.2;
+                            break;
+                        case Healer:
+                            factor = 1.7;
+                            break;
+                        case Factory:
+                            factor = 1.1;
+                            break;
+                        case Rocket:
+                            factor = 0.9;
+                            break;
+                    }
+                    targetMap.maxInfluenceMultiple(rangerTargetInfluence, pos.get_x(), pos.get_y(), factor);
                 }
                 else {
                     double factor = 1;
