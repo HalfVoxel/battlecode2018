@@ -436,12 +436,34 @@ struct BotHealer : BotUnit {
                         continue;
                     }
                     double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
-                    if (remainingLife == 1.0) {
+                    if (remainingLife == 1.0 && u.get_unit_type() != Mage) {
                         continue;
                     }
                     auto uMapLocation = u.get_location().get_map_location();
 
-                    targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 15 * (2.0 - remainingLife));
+                    double factor = 1;
+                    switch (u.get_unit_type()) {
+                        case Worker:
+                            factor = 0.1;
+                            break;
+                        case Mage:
+                            factor = 1.6;
+                            break;
+                        case Ranger:
+                            factor = 1.0;
+                            break;
+                        case Healer:
+                            factor = 1.2;
+                            break;
+                        case Knight:
+                            factor = 1.1;
+                            break;
+                        default:
+                            break;
+                    }
+                    remainingLife -= factor;
+
+                    targetMap.maxInfluenceMultiple(healerTargetInfluence, uMapLocation.get_x(), uMapLocation.get_y(), 12 * (1.2 - remainingLife));
                 }
             }
             /*for (auto& u : ourUnits) {
@@ -508,7 +530,7 @@ struct BotHealer : BotUnit {
         auto unitMapLocation = unit.get_location().get_map_location();
         bool succeededHealing = false;
         int bestTargetId = -1;
-        double bestTargetRemainingLife = 1.0;
+        double bestTargetRemainingLife = 1000;
         for (auto& u : ourUnits) {
             if (!u.get_location().is_on_map()) {
                 continue;
@@ -521,6 +543,28 @@ struct BotHealer : BotUnit {
                 if (remainingLife == 1.0) {
                     continue;
                 }
+
+                double factor = 1;
+                switch (u.get_unit_type()) {
+                    case Worker:
+                        factor = 0.1;
+                        break;
+                    case Mage:
+                        factor = 1.3;
+                        break;
+                    case Ranger:
+                        factor = 1.0;
+                        break;
+                    case Healer:
+                        factor = 1.2;
+                        break;
+                    case Knight:
+                        factor = 1.1;
+                        break;
+                    default:
+                        break;
+                }
+                remainingLife -= factor;
 
                 if (gc.can_heal(id, u.get_id()) && gc.is_heal_ready(id)) {
                     if (remainingLife < bestTargetRemainingLife) {
@@ -694,11 +738,14 @@ struct BotFactory : BotUnit {
                 // Never have more healers than the combined total of other military units
                 if (otherMilitary > state.typeCount[Healer]) {
                     double score = 0.0;
-                    if (state.typeCount[Ranger] > 6) {
-                        score += 4.5;
+                    if (state.typeCount[Ranger] >= 2) {
+                        score += 3;
                     }
-                    if (state.typeCount[Ranger] > 10) {
-                        score += state.typeCount[Ranger] * 0.7 + state.typeCount[Mage] * 0.7;
+                    if (state.typeCount[Ranger] >= 4) {
+                        score += 2.5;
+                    }
+                    if (state.typeCount[Ranger] > 6) {
+                        score += state.typeCount[Ranger] * 0.9 + state.typeCount[Mage] * 0.7;
                     }
                     score /= state.typeCount[Healer];
                     score += averageHealerSuccessRate * 1.8;
