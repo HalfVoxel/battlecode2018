@@ -111,7 +111,9 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     ucontext_t *context = (ucontext_t *)arg;
     addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
 #endif
+#ifdef CUSTOM_BACKTRACE
     print_trace();
+#endif
     safe_write("flushing stdio\n");
     fflush(stdout);
     fflush(stderr);

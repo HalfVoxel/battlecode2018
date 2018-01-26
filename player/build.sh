@@ -20,7 +20,7 @@ step() {
     $@
 }
 
-DEPLOY_CC='g++ -std=c++11 -O2 -g -rdynamic -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie'
+DEPLOY_CC='g++ -std=c++11 -O2 -g -rdynamic -DNDEBUG -fno-omit-frame-pointer -no-pie'
 
 BC_DEPLOY=0
 if [ "$BC_DEPLOY" = '2' ]; then
