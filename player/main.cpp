@@ -30,6 +30,7 @@ bool existsPathToEnemy;
 int lastFactoryBlueprintTurn = -1;
 int lastRocketBlueprintTurn = -1;
 int turnsSinceLastFight;
+int initialDistanceToEnemyLocation = 1000;
 bool workersMove;
 
 // True if mars has any landing spots (i.e does mars have any traversable ground)
@@ -292,6 +293,8 @@ struct BotWorker : BotUnit {
                     double score = state.typeCount[Factory] < 4 ? (2.5 - 0.5 * state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
                     if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 800 > state.remainingKarboniteOnEarth)
                         score = 0;
+                    if (state.typeCount[Factory] < 2)
+                        score += 12.0 / (5.0 + initialDistanceToEnemyLocation);
 
                     score *= structurePlacementScore(x, y, Factory);
 
@@ -779,15 +782,15 @@ struct BotFactory : BotUnit {
                         score += 3;
                     }
                     if (state.typeCount[Ranger] >= 3) {
-                        score += 2;
+                        score += 3;
                     }
                     if (state.typeCount[Ranger] >= 5) {
-                        score += 3;
+                        score += 4;
                     }
                     if (state.typeCount[Ranger] > 6) {
                         score += state.typeCount[Ranger] * 1.2 + state.typeCount[Mage] * 0.7;
                     }
-                    score /= state.typeCount[Healer];
+                    score /= state.typeCount[Healer] + 1.0;
                     score += averageHealerSuccessRate * 1.5;
                     if (hasOvercharge)
                         score += 1.0;
@@ -1145,6 +1148,9 @@ void computeDistancesToInitialLocations() {
             bfsQueue.pop();
             int x = cur.first;
             int y = cur.second;
+            if (team == 1) {
+                initialDistanceToEnemyLocation = min(initialDistanceToEnemyLocation, (int)(distanceToInitialLocation[0].weights[x][y] + distanceToInitialLocation[1].weights[x][y]));
+            }
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     int nx = x + dx;
