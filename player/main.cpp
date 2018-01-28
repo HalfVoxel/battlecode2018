@@ -400,13 +400,13 @@ struct BotFactory : BotUnit {
                 if (nearbyEnemiesWeight > 0.7)
                     score += 0.1;
                 if (nearbyEnemiesWeight > 0.8)
-                    score += 0.4;
+                    score += 0.6;
                 if (nearbyEnemiesWeight > 0.9) {
-                    score += 1;
+                    score += 1.5;
                     if (gc.get_round() < 120)
                         score += 1;
                 }
-                score += 30 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
+                score += 6 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
                 if (gc.get_round() < 90)
                     score += 15 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
 
@@ -937,11 +937,15 @@ void updateEnemyInfluenceMaps(){
             if (u.get_unit_type() == Knight) {
                 enemyInfluenceMap.addInfluenceMultiple(enemyKnightTargetInfluence, pos.get_x(), pos.get_y(), 3.0);
             }
-            enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
+            if (u.get_unit_type() == Factory) {
+				enemyFactoryNearbyMap.maxInfluence(enemyFactoryNearbyInfluence, pos.get_x(), pos.get_y());
+			}
+			if (u.get_unit_type() != Worker) {
+                enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
+            }
             enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
             enemyExactPositionMap.weights[pos.get_x()][pos.get_y()] = 1;
             healerOverchargeMap.maxInfluence(healerOverchargeInfluence, pos.get_x(), pos.get_y());
-            enemyFactoryNearbyMap.maxInfluence(enemyFactoryNearbyInfluence, pos.get_x(), pos.get_y());
         }
     }
 

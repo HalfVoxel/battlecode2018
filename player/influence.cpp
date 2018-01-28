@@ -215,7 +215,7 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            enemyFactoryNearbyInfluence[dx+r][dy+r] = 1.0 / (1.0 + dis2);
+            enemyFactoryNearbyInfluence[dx+r][dy+r] = 10.0 / (10.0 + dis2);
         }
     }
     
