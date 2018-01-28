@@ -1841,6 +1841,9 @@ int main() {
     planetMap = &gc.get_starting_planet(gc.get_planet());
     w = planetMap->get_width();
     h = planetMap->get_height();
+    // Side effect: findUnits sets ourTeam and opponentTeam
+    findUnits();
+
     initKarboniteMap();
     initInfluence();
 
