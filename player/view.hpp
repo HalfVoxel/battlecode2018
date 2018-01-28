@@ -199,7 +199,9 @@ void printAt(Region region, pii screenPos, const function<string(int, int)> colo
     }
 
     cout << '\n';
-    for (int y = region.ymin; y <= region.ymax; y++) {
+    // Note: The tinyview viewer displays maps with (0,0) at the bottom left corner
+    // Thus we need to reverse the order of the rows here to show the same thing
+    for (int y = region.ymax; y >= region.ymin; y--) {
         if (hasOffset) cout << "\033[" << (row+1+y-region.ymin) << ";" << col << "H";
         cout << "\033[90m";
         cout << (y < 10 ? " " : "") << y << ": ";
