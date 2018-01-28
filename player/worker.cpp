@@ -90,7 +90,7 @@ vector<KarboniteGroup> groupKarbonite() {
 }
 
 void matchWorkers() {
-    if (planet != Earth || ourTeam != 0) return;
+    if (planet != Earth) return;
 
     auto groups = groupKarbonite();
     cout << endl;
@@ -141,6 +141,7 @@ void matchWorkers() {
             auto distanceMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), costMap);
 
             // Workers take approximately 2 ticks to move one tile
+            // TODO: Can optimize to simply 2 times BFS-distance
             PathfindingMap timeCost(w, h);
             timeCost += 2;
 
