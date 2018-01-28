@@ -83,8 +83,10 @@ vector<KarboniteGroup> groupKarbonite() {
         }
     }
 
-    // print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return (int)karboniteMap.weights[x][y]; }));
-    // print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return max(0, groupIndices[x][y]); }));
+    if (gc.get_round() == 11) {
+        print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return (int)karboniteMap.weights[x][y]; }));
+        print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return max(0, groupIndices[x][y]); }));
+    }
 
     return groups;
 }
@@ -116,7 +118,10 @@ void matchWorkers() {
     HungarianAlgorithm matcher;
     Pathfinder pathfinder;
     int numTargets = groups.size()*3 + unitTargets.size()*3;
-    if (numTargets == 0) {
+
+    // If there are no targets or if we have very little time
+    // then fall back to the previous algorithm
+    if (numTargets == 0 || lowTimeRemaining) {
         for (auto* worker : workers) {
             worker->calculatedTargetMap = PathfindingMap();
         }
@@ -126,13 +131,15 @@ void matchWorkers() {
     vector<int> timeToReachTarget(numTargets, 10000);
 
     int numIterations = 2;
-    if (lowTimeRemaining) numIterations = 1;
 
     for (int it=0; it < numIterations; it++) {
         bool finalIteration = it == numIterations - 1;
-
+        // costMatrix[i][j] = cost for worker i to be assigned target j
+        // Note that scores will first be stored here and then the matrix values will be negated to convert them to costs
         vector<vector<double>> costMatrix (workers.size(), vector<double>(numTargets));
+        // timeMatrix[i][j] = turns for worker i to reach target j
         vector<vector<int>> timeMatrix (workers.size(), vector<int>(numTargets));
+
         for (int wi = 0; wi < workers.size(); wi++) {
             auto* worker = workers[wi];
             auto targetMap = worker->getOriginalTargetMap();
@@ -144,8 +151,27 @@ void matchWorkers() {
             // TODO: Can optimize to simply 2 times BFS-distance
             PathfindingMap timeCost(w, h);
             timeCost += 2;
+            for (int x = 0; x < w; x++) {
+                for (int y = 0; y < h; y++) {
+                    if (isinf(passableMap.weights[x][y])) timeCost.weights[x][y] = passableMap.weights[x][y];
+                }
+            }
 
             auto timeMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), timeCost);
+            if (gc.get_round() == 11 && wi == 0) {
+                
+                // print({ 0, 0, w - 1, h - 1 }, 0, 60, [&](int x, int y) { return distanceToInitialLocation[0].weights[x][y]; });
+                // print({ 0, 0, w - 1, h - 1 }, 0, 60, [&](int x, int y) { return distanceToInitialLocation[1].weights[x][y]; });
+                // print({ 0, 0, w - 1, h - 1 }, 0, 60, [&](int x, int y) { return fuzzyKarboniteMap.weights[x][y]; });
+                // print({ 0, 0, w - 1, h - 1 }, 0, 1, [&](int x, int y) { return ourStartingPositionMap.weights[x][y]; });
+
+                
+
+                // print({ 0, 0, w - 1, h - 1 }, 0, 150, [&](int x, int y) { return targetMap.weights[x][y]; });
+                // print({ 0, 0, w - 1, h - 1 }, 0, 80, [&](int x, int y) { return timeMap[x][y]; });
+                // print({ 0, 0, w - 1, h - 1 }, 0, 150, [&](int x, int y) { return distanceMap[x][y]; });
+                // if (ourTeam == 1) exit(0);
+            }
 
             for (int i = 0; i < groups.size(); i++) {
                 double score = 0;
@@ -163,7 +189,7 @@ void matchWorkers() {
                 double previousWork2 = previousWork1 + max(0.0, minTime - timeToReachTarget[i*3 + 1]);
 
                 for (auto p : groups[i].tiles) {
-                    score += targetMap.weights[p.first][p.second] / (1 + distanceMap[p.first][p.second]);
+                    score = max(score, targetMap.weights[p.first][p.second] / (1 + distanceMap[p.first][p.second]));
                     minTime = min(minTime, timeMap[p.first][p.second]);
                 }
 
@@ -183,6 +209,10 @@ void matchWorkers() {
                 timeMatrix[wi][i*3 + 0] = minTime;
                 timeMatrix[wi][i*3 + 1] = minTime;
                 timeMatrix[wi][i*3 + 2] = minTime;
+
+                if (gc.get_round() == 11) {
+                    cout << "Worker " << wi << " score for group " << i << ": " << score0 << " " << score1 << " " << score2 << endl;
+                }
             }
             int offset = groups.size()*3;
 
@@ -254,6 +284,7 @@ void matchWorkers() {
             }
 
             timeToReachTarget[assignment[wi]] = timeMatrix[wi][assignment[wi]];
+            // cout << "Time to reach group " << (assignment[wi]/3) << " + " << (assignment[wi] % 3) << " = " << timeToReachTarget[assignment[wi]] << endl;
 
             // Performance
             if (!finalIteration) continue;
@@ -266,8 +297,12 @@ void matchWorkers() {
                 // Move towards a building
                 target = (target - offset)/3;
                 assert(target < unitTargets.size());
-
                 auto pos2 = unitTargets[target]->get_map_location();
+
+                if (gc.get_round() == 11) {
+                    cout << "Worker " << wi << " goes to a building at " << pos2.get_x() << " " << pos2.get_y() << endl;
+                }
+
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dy = -1; dy <= 1; dy++) {
                         int nx = pos2.get_x() + dx;
@@ -281,6 +316,10 @@ void matchWorkers() {
                 target /= 3;
                 assert(target < groups.size());
 
+                if (gc.get_round() == 11) {
+                    cout << "Worker " << wi << " goes to group " << target << endl;
+                }
+
                 for (auto p : groups[target].tiles) {
                     mask.weights[p.first][p.second] = 1;
                 }
@@ -290,7 +329,7 @@ void matchWorkers() {
         }
     }
     // cout << "Done" << endl;
-    // if (gc.get_round() == 63) exit(0);
+    //if (gc.get_round() == 11) exit(0);
 }
 
 // Returns score for factory placement
