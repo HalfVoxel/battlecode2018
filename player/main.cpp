@@ -26,6 +26,7 @@ map<UnitType, double> timeConsumptionByUnit;
 map<UnitType, string> unitTypeToString;
 bool hasOvercharge;
 bool hasBlink;
+bool enemyHasMages;
 
 int turnsSinceLastFight;
 
@@ -393,6 +394,8 @@ struct BotFactory : BotUnit {
                     score += 20;
                 if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 26 && gc.get_round() < 100)
                     score += 5;
+                if (state.typeCount[Factory] >= 3)
+                    score *= 0.7;
                 score /= state.typeCount[Knight] + 1.0;
                 if (nearbyEnemiesWeight > 0.7)
                     score += 0.1;
@@ -406,6 +409,10 @@ struct BotFactory : BotUnit {
                 score += 30 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
                 if (gc.get_round() < 90)
                     score += 15 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
+
+                if (enemyHasMages)
+                    score *= 0.7;
+				score *= 4.0 / (4.0 + state.typeCount[Ranger]);
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
                     if (gc.can_produce_robot(id, Knight)) {
                         gc.produce_robot(id, Knight);
@@ -695,6 +702,15 @@ void findUnits() {
         allUnits.push_back(unit.clone());
     for (auto& unit : enemyUnits)
         allUnits.push_back(unit.clone());
+}
+
+void updateEnemyHasMages() {
+    if (enemyHasMages)
+        return;
+    for (auto& u : enemyUnits) {
+        if (u.get_unit_type() == Mage)
+            enemyHasMages = true;
+    }
 }
 
 void updateAsteroids() {
@@ -1897,6 +1913,7 @@ int main() {
         updateMageNearbyMap();
         updateStructureProximityMap();
         updateDamagedStructuresMap();
+        updateEnemyHasMages();
 
         updateRocketHazardMap();
         if (planet == Earth) {
