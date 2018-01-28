@@ -3,4 +3,5 @@
 #include "influence.cpp"
 #include "maps.cpp"
 #include "rocket.cpp"
+#include "worker.cpp"
 #include "main.cpp"

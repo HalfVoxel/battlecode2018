@@ -6,6 +6,7 @@
 #include <iostream>
 #include <stack>
 #include <map>
+#include <functional>
 
 #define NO_IMPLICIT_COPIES
 
@@ -42,6 +43,66 @@ extern bool lowTimeRemaining;
 extern bool hasOvercharge;
 
 extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
+
+extern bool existsPathToEnemy;
+// True if mars has any landing spots (i.e does mars have any traversable ground)
+extern bool anyReasonableLandingSpotOnInitialMars;
+
+// Sort of how many distinct ways there are to get to the enemy
+// If the enemy is behind a wall, then this is 0
+// If there is a choke point of size 1 then this is 1.
+// If the player starts in 2 places, each of them can reach the enemy in 1 way, then this is 2.
+// All paths to the enemy must thouch distinct nodes.
+// Maximum value is 6 to avoid wasting too much time calculating it.
+extern int mapConnectedness;
+
+extern int lastFactoryBlueprintTurn;
+extern int lastRocketBlueprintTurn;
+extern int initialDistanceToEnemyLocation;
+extern bool workersMove;
+
+struct State {
+    std::map<bc::UnitType, int> typeCount;
+    double remainingKarboniteOnEarth;
+    int totalRobotDamage;
+    int totalUnitCount;
+    int earthTotalUnitCount;
+};
+
+extern State state;
+
+struct MacroObject {
+    double score;
+    unsigned cost;
+    int priority;
+    int rnd;
+    std::function<void()> lambda;
+
+    MacroObject(double _score, unsigned _cost, int _priority, std::function<void()> _lambda) {
+        score = _score;
+        cost = _cost;
+        priority = _priority;
+        lambda = _lambda;
+        rnd = rand();
+    }
+
+    void execute() {
+        lambda();
+    }
+
+    bool operator<(const MacroObject& other) const {
+        if (priority != other.priority) {
+            return priority < other.priority;
+        }
+        if (score != other.score) {
+            return score < other.score;
+        }
+        return rnd < other.rnd;
+    }
+};
+
+extern std::vector<MacroObject> macroObjects;
+extern double bestMacroObjectScore;
 
 void invalidate_units();
 void invalidate_unit(unsigned int id);

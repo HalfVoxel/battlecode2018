@@ -37,6 +37,18 @@ bool lowTimeRemaining = false;
 
 map<unsigned, vector<unsigned> > unitShouldGoToRocket;
 
+State state;
+vector<MacroObject> macroObjects;
+double bestMacroObjectScore;
+
+bool existsPathToEnemy;
+bool anyReasonableLandingSpotOnInitialMars;
+int mapConnectedness;
+int lastFactoryBlueprintTurn = -1;
+int lastRocketBlueprintTurn = -1;
+int initialDistanceToEnemyLocation = 1000;
+bool workersMove;
+
 void invalidate_unit(unsigned int id) {
 	auto t0 = millis();
     if (gc.has_unit(id)) {
