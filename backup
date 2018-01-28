@@ -41,7 +41,9 @@ if os.path.isfile("battlecode"):
     os.remove("battlecode")
 
 subprocess.call(["ln -s bc18-scaffold/battlecode battlecode"], shell=True)
-subprocess.call(["./build.sh"], env=env, cwd="player")
+if subprocess.call(["./build.sh"], env=env, cwd="player") != 0:
+    exit(1)
+
 subprocess.call(["rm battlecode"], shell=True)
 
 
