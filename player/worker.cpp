@@ -493,7 +493,7 @@ void BotWorker::tick() {
                 if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 800 > state.remainingKarboniteOnEarth)
                     score = 0;
                 if (state.typeCount[Factory] < 2)
-                    score += 12.0 / (5.0 + initialDistanceToEnemyLocation);
+                    score += 12.0 / (15.0 + initialDistanceToEnemyLocation);
 
                 score *= structurePlacementScore(x, y, Factory);
 
