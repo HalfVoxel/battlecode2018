@@ -6,6 +6,10 @@
 using namespace bc;
 using namespace std;
 
+int miningSpeed = 3;
+int buildSpeed = 5;
+int repairSpeed = 10;
+
 struct KarboniteGroup {
     vector<pii> tiles;
     int totalValue;
@@ -22,12 +26,11 @@ vector<KarboniteGroup> groupKarbonite() {
     vector<vector<bool>> covered(w, vector<bool>(h));
     vector<vector<int>> groupIndices(w, vector<int>(h, -1));
     int maxTimeCostPerGroup = 80;
-    int miningSpeed = 3;
     vector<KarboniteGroup> groups;
 
     for (int x = 0; x < w; x++) {
         for (int y = 0; y < h; y++) {
-            if (covered[x][y] || karboniteMap.weights[x][y] == 0) continue;
+            if (covered[x][y] || karboniteMap.weights[x][y] <= 0) continue;
 
             KarboniteGroup group;
             queue<pii> que1;
@@ -107,6 +110,9 @@ void matchWorkers() {
         }
     }
 
+    // Note: Hungarian algorithm code will otherwise try to read out of bounds
+    if (workers.size() == 0) return;
+
     HungarianAlgorithm matcher;
     Pathfinder pathfinder;
     int numTargets = groups.size()*3 + unitTargets.size()*3;
@@ -117,98 +123,170 @@ void matchWorkers() {
         return;
     }
 
+    vector<int> timeToReachTarget(numTargets, 10000);
 
-    vector<vector<double>> costMatrix (workers.size(), vector<double>(numTargets));
-    for (int wi = 0; wi < workers.size(); wi++) {
-        auto* worker = workers[wi];
-        auto targetMap = worker->getOriginalTargetMap();
-        auto costMap = worker->getCostMap();
-        auto pos = worker->unit.get_map_location();
-        auto distanceMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), costMap);
-        for (int i = 0; i < groups.size(); i++) {
-            auto score = 0;
-            for (auto p : groups[i].tiles) {
-                score += targetMap.weights[p.first][p.second] / (1 + distanceMap[p.first][p.second]);
+    int numIterations = 2;
+    if (lowTimeRemaining) numIterations = 1;
+
+    for (int it=0; it < numIterations; it++) {
+        bool finalIteration = it == numIterations - 1;
+
+        vector<vector<double>> costMatrix (workers.size(), vector<double>(numTargets));
+        vector<vector<int>> timeMatrix (workers.size(), vector<int>(numTargets));
+        for (int wi = 0; wi < workers.size(); wi++) {
+            auto* worker = workers[wi];
+            auto targetMap = worker->getOriginalTargetMap();
+            auto costMap = worker->getCostMap();
+            auto pos = worker->unit.get_map_location();
+            auto distanceMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), costMap);
+
+            // Workers take approximately 2 ticks to move one tile
+            PathfindingMap timeCost(w, h);
+            timeCost += 2;
+
+            auto timeMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), timeCost);
+
+            for (int i = 0; i < groups.size(); i++) {
+                double score = 0;
+                double totalKarbonite = 0;
+                double minTime = 1000000;
+                for (auto p : groups[i].tiles) {
+                    minTime = min(minTime, timeMap[p.first][p.second]);
+                    totalKarbonite += karboniteMap.weights[p.first][p.second];
+                }
+                assert(totalKarbonite > 0);
+
+                // How many ticks the best worker will have already mined at this spot before we get there
+                double previousWork1 = max(0.0, minTime - timeToReachTarget[i*3 + 0]);
+                // How many ticks the best and 2nd best worker will have spent here before the 3rd worker (us) gets there
+                double previousWork2 = previousWork1 + max(0.0, minTime - timeToReachTarget[i*3 + 1]);
+
+                for (auto p : groups[i].tiles) {
+                    score += targetMap.weights[p.first][p.second] / (1 + distanceMap[p.first][p.second]);
+                    minTime = min(minTime, timeMap[p.first][p.second]);
+                }
+
+
+                // TODO: Use for loop instead
+                double score0 = score;
+                double score1 = score * (totalKarbonite - miningSpeed*previousWork1)/totalKarbonite;
+                double score2 = score * (totalKarbonite - miningSpeed*previousWork2)/totalKarbonite;
+
+                score0 = max(score0, 0.0);
+                score1 = max(score1, 0.0);
+                score2 = max(score2, 0.0);
+
+                costMatrix[wi][i*3 + 0] = score0;
+                costMatrix[wi][i*3 + 1] = score1 / 2;
+                costMatrix[wi][i*3 + 2] = score2 / 3;
+                timeMatrix[wi][i*3 + 0] = minTime;
+                timeMatrix[wi][i*3 + 1] = minTime;
+                timeMatrix[wi][i*3 + 2] = minTime;
             }
-            // cout << "Score for " << wi << " " << i << ": " << score << endl;
-            costMatrix[wi][i*3 + 0] = score;
-            costMatrix[wi][i*3 + 1] = score/2;
-            costMatrix[wi][i*3 + 2] = score/4;
-        }
-        int offset = groups.size()*3;
+            int offset = groups.size()*3;
 
-        for (int i = 0; i < unitTargets.size(); i++) {
-            auto pos2 = unitTargets[i]->get_map_location();
-            double score = 0;
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = -1; dy <= 1; dy++) {
-                    int nx = pos2.get_x() + dx;
-                    int ny = pos2.get_y() + dy;
-                    if (nx < 0 || nx < 0 || nx >= w || ny >= h) continue;
-                    score = max(score, targetMap.weights[nx][ny] / (1 + distanceMap[nx][ny]));
+            for (int i = 0; i < unitTargets.size(); i++) {
+                auto pos2 = unitTargets[i]->get_map_location();
+                double score = 0;
+                double minTime = 1000000;
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        int nx = pos2.get_x() + dx;
+                        int ny = pos2.get_y() + dy;
+                        if (nx < 0 || nx < 0 || nx >= w || ny >= h) continue;
+                        score = max(score, targetMap.weights[nx][ny] / (1 + distanceMap[nx][ny]));
+                        minTime = min(minTime, timeMap[nx][ny]);
+                    }
+                }
+
+                auto totalHealthToRepair = unitTargets[i]->get_max_health() - unitTargets[i]->get_health();
+                // How many ticks the best worker will have already built at this spot before we get there
+                double previousWork1 = max(0.0, minTime - timeToReachTarget[offset + i*3 + 0]);
+                // How many ticks the best and 2nd best worker will have spent here before the 3rd worker (us) gets there
+                double previousWork2 = previousWork1 + max(0.0, minTime - timeToReachTarget[offset + i*3 + 1]);
+
+                // TODO: Slightly incorrect if repairing instead of building, should use repairSpeed
+                double score0 = score;
+                double score1 = score * (totalHealthToRepair - buildSpeed*previousWork1)/totalHealthToRepair;
+                double score2 = score * (totalHealthToRepair - buildSpeed*previousWork2)/totalHealthToRepair;
+
+                score0 = max(score0, 0.0);
+                score1 = max(score1, 0.0);
+                score2 = max(score2, 0.0);
+
+                costMatrix[wi][offset + i*3 + 0] = score;
+                costMatrix[wi][offset + i*3 + 1] = score / 2;
+                costMatrix[wi][offset + i*3 + 2] = score / 3;
+                timeMatrix[wi][offset + i*3 + 0] = minTime;
+                timeMatrix[wi][offset + i*3 + 1] = minTime;
+                timeMatrix[wi][offset + i*3 + 2] = minTime;
+            }
+        }
+
+
+        // Invert cost matrix
+        double mx = 0;
+        for (int i = 0; i < costMatrix.size(); i++) {
+            for (auto v : costMatrix[i]) mx = max(mx, v);
+        }
+
+        for (int i = 0; i < costMatrix.size(); i++) {
+            for (auto& v : costMatrix[i]) v = mx - v;
+        }
+
+        vector<int> assignment;
+        double cost = matcher.Solve(costMatrix, assignment);
+        assert(assignment.size() == workers.size());
+
+        // Reset
+        for (int i = 0; i < timeToReachTarget.size(); i++) timeToReachTarget[i] = 100000;
+
+        for (int wi = 0; wi < assignment.size(); wi++) {
+            // cout << "Worker " << wi << " goes to " << assignment[wi] << endl;
+            auto* worker = workers[wi];
+            int target = assignment[wi];
+
+            if (target == -1) {
+                // No assigned target
+                worker->calculatedTargetMap = PathfindingMap();
+                continue;
+            }
+
+            timeToReachTarget[assignment[wi]] = timeMatrix[wi][assignment[wi]];
+
+            // Performance
+            if (!finalIteration) continue;
+
+            assert(target >= 0);
+            PathfindingMap mask(w, h);
+            int offset = groups.size()*3;
+
+            if (target >= offset) {
+                // Move towards a building
+                target = (target - offset)/3;
+                assert(target < unitTargets.size());
+
+                auto pos2 = unitTargets[target]->get_map_location();
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        int nx = pos2.get_x() + dx;
+                        int ny = pos2.get_y() + dy;
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                        mask.weights[nx][ny] = 1;
+                    }
+                }
+            } else {
+                // Move towards a group
+                target /= 3;
+                assert(target < groups.size());
+
+                for (auto p : groups[target].tiles) {
+                    mask.weights[p.first][p.second] = 1;
                 }
             }
 
-            costMatrix[wi][offset + i*3 + 0] = score;
-            costMatrix[wi][offset + i*3 + 1] = score/2;
-            costMatrix[wi][offset + i*3 + 2] = score/4;
+            worker->calculatedTargetMap = mask * worker->getOriginalTargetMap();
         }
-    }
-
-
-    // Invert cost matrix
-    double mx = 0;
-    for (int i = 0; i < costMatrix.size(); i++) {
-        for (auto v : costMatrix[i]) mx = max(mx, v);
-    }
-
-    for (int i = 0; i < costMatrix.size(); i++) {
-        for (auto& v : costMatrix[i]) v = mx - v;
-    }
-
-    vector<int> assignment;
-    double cost = matcher.Solve(costMatrix, assignment);
-    assert(assignment.size() == workers.size());
-    for (int wi = 0; wi < assignment.size(); wi++) {
-        // cout << "Worker " << wi << " goes to " << assignment[wi] << endl;
-        auto* worker = workers[wi];
-        int target = assignment[wi];
-
-        if (target == -1) {
-            // No assigned target
-            worker->calculatedTargetMap = PathfindingMap();
-            continue;
-        }
-
-        assert(target >= 0);
-        PathfindingMap mask(w, h);
-        int offset = groups.size()*3;
-
-        if (target >= offset) {
-            // Move towards a building
-            target = (target - offset)/3;
-            assert(target < unitTargets.size());
-
-            auto pos2 = unitTargets[target]->get_map_location();
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = -1; dy <= 1; dy++) {
-                    int nx = pos2.get_x() + dx;
-                    int ny = pos2.get_y() + dy;
-                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-                    mask.weights[nx][ny] = 1;
-                }
-            }
-        } else {
-            // Move towards a group
-            target /= 3;
-            assert(target < groups.size());
-
-            for (auto p : groups[target].tiles) {
-                mask.weights[p.first][p.second] = 1;
-            }
-        }
-
-        worker->calculatedTargetMap = mask * worker->getOriginalTargetMap();
     }
     // cout << "Done" << endl;
     // if (gc.get_round() == 63) exit(0);
