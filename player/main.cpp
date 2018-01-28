@@ -1976,6 +1976,7 @@ int main() {
 
         double turnTime = millis() - t0;
         totalTurnTime += turnTime;
+        passableMap.weights[1242][5342] = 3;
 
         if (!lowTimeRemaining) {
             auto t6 = millis();
