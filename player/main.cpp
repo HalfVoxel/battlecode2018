@@ -904,13 +904,10 @@ void updateFuzzyKarboniteMap() {
             if (planet == Earth) {
                 int disDiff = distanceToInitialLocation[enemyTeam].weights[i][j] - distanceToInitialLocation[ourTeam].weights[i][j];
                 if (disDiff <= 6) {
-                    fuzzyKarboniteMap.weights[i][j] *= 1.4;
-                }
-                if (disDiff <= 0) {
                     fuzzyKarboniteMap.weights[i][j] *= 1.2;
                 }
-                if (disDiff <= -3) {
-                    fuzzyKarboniteMap.weights[i][j] *= 1.1;
+                if (distanceToInitialLocation[enemyTeam].weights[i][j] < 5) {
+                    fuzzyKarboniteMap.weights[i][j] *= 0.7;
                 }
                 fuzzyKarboniteMap.weights[i][j] /= 1.0 + workerProximityMap.weights[i][j];
             }
