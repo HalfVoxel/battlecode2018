@@ -9,6 +9,8 @@ import random
 import signal
 from itertools import chain
 from scipy.stats import poisson
+from io import StringIO
+import gzip
 
 parser = argparse.ArgumentParser(description='Run BattleCode Bots')
 parser.add_argument("-a", "--teamA", help="Team A")
@@ -23,6 +25,7 @@ parser.add_argument("--max-maps", help="Max number of maps, if lower than the to
 parser.add_argument("--no-color", help="Disable color", action="store_true")
 parser.add_argument("--dnaA", help="Genetic information for Team A", nargs="*")
 parser.add_argument("--dnaB", help="Genetic information for Team B", nargs="*")
+parser.add_argument("--save-replays", help="Store all logs and replays", action="store_true")
 args = parser.parse_args()
 
 if args.threads <= 0:
@@ -136,15 +139,45 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
         winRegex = re.compile(r"Winner is player (\d)")
         sizeRegex = re.compile(r"MAP IS (\d+)x(\d+)")
         roundRegex = re.compile(r".* Round: (\d+)")
+        crashRegex = re.compile(r"\[(\w+):(\w+)\] !!! caught signal")
+        replayRegex = re.compile(r"Saving replay to (.*)\n", re.DOTALL)
+
         mapIndex = 0
         lastRound = 0
         mapSize = None
+        replayPath = ""
+        log = StringIO()
         try:
             gen = execute(args, quiet)
             next(gen)
             yield None
 
             for line in gen:
+                log.write(line)
+
+                crashMatch = crashRegex.search(line)
+                if crashMatch is not None:
+                    planet = crashMatch.group(1)
+                    color = crashMatch.group(2)
+                    winningTeam = None
+                    if color == "red":
+                        winningTeam = "B"
+                    elif color == "blue":
+                        winningTeam = "A"
+                    else:
+                        print("Couldn't parse crasher: " + color)
+                        continue
+
+                    # Eat remaining
+                    for line2 in gen:
+                        log.write(line2)
+                        replayMatch = replayRegex.search(line2)
+                        if replayMatch is not None:
+                            replayPath = replayMatch.group(1)
+
+                    yield (winningTeam, lastRound, "(opponent crashed on " + str(planet) + ")", mapName, mapSize, log, replayPath)
+                    break
+
                 roundMatch = roundRegex.search(line)
                 if roundMatch is not None:
                     lastRound = int(roundMatch.group(1))
@@ -160,6 +193,10 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
                 if lastRound % 100 == 0:
                     yield None
 
+                replayMatch = replayRegex.search(line)
+                if replayMatch is not None:
+                    replayPath = replayMatch.group(1)
+
                 win = winRegex.search(line)
                 if win is not None:
                     winningTeam = None
@@ -174,13 +211,17 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
                     round = lastRound
                     reason = ""
                     mapIndex += 1
-                    yield (winningTeam, round, reason, mapName, mapSize)
+                    # Eat remaining
+                    for line2 in gen:
+                        log.write(line2)
+                        pass
+                    yield (winningTeam, round, reason, mapName, mapSize, log, replayPath)
         except subprocess.CalledProcessError:
             print("\rServer crashed. Ignoring the rest of the maps")
             return
 
 
-def printResult(result, switch):
+def printResult(result, switch, printedPath):
     team = result[0]
     round = result[1]
     reason = result[2]
@@ -197,7 +238,7 @@ def printResult(result, switch):
     mapStr = yellowStr + mapName.ljust(18) + reset + " " + (str(size[0]) + "x" + str(size[1])).ljust(5) + "   " + ("B vs A" if switch else "A vs B") + ": "
 
     print("\r" + mapStr, end="             ")
-    print(teamStr + " won at round " + str(round) + " " + reason)
+    print(teamStr + " won at round " + str(round) + " " + reason + (" replay: " + printedPath if printedPath is not None else ""))
     sys.stdout.flush()
 
 
@@ -237,7 +278,34 @@ def run_tournament_part(teamA, teamB, dnaA, dnaB, switch, seed, maps):
             yield None
             continue
 
-        printResult(result, switch)
+        logData = result[5]
+        replayPath = result[6]
+        printedPath = None
+        if args.save_replays:
+            os.makedirs("tournament_replays", exist_ok=True)
+            filename = "tournament_replays/replay_"
+            index = 0
+            while os.path.exists(filename+str(index) + ".bc18z") or os.path.exists(filename+str(index) + ".bc18log"):
+                index += 1
+
+            filename = filename+str(index)
+
+            if os.path.exists(replayPath):
+                with gzip.open(filename + ".bc18z", 'wb') as f:
+                    f2 = open(replayPath, "rb")
+                    f.write(f2.read())
+                    f2.close()
+
+                os.remove(replayPath)
+            else:
+                print("Replay path could not be found " + replayPath)
+
+            f = open(filename + ".bc18log", "w")
+            f.write(logData.getvalue())
+            f.close()
+            printedPath = os.path.abspath(filename)
+
+        printResult(result, switch, printedPath)
 
         team = result[0]
         if switch:
