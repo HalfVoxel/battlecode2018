@@ -40,15 +40,20 @@ env["BC_PLATFORM"] = detect_platform()
 if os.path.isfile("battlecode"):
     os.remove("battlecode")
 
+if os.path.isdir("player_staging"):
+    shutil.rmtree("player_staging")
+
+shutil.copytree("player", "player_staging")
 subprocess.call(["ln -s bc18-scaffold/battlecode battlecode"], shell=True)
-if subprocess.call(["./build.sh"], env=env, cwd="player") != 0:
+if subprocess.call(["./build.sh"], env=env, cwd="player_staging") != 0:
+    shutil.rmtree("player_staging")
     exit(1)
 
 subprocess.call(["rm battlecode"], shell=True)
 
 
 def backup(tag):
-    shutil.copytree("player", "backups/" + tag)
+    os.rename("player_staging", "backups/" + tag)
 
 
 backup(tag)
