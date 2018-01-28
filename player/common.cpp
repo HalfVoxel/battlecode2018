@@ -112,6 +112,7 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     signal(SIGSEGV, SIG_DFL);
     signal(SIGABRT, SIG_DFL);
     signal(sig, SIG_DFL);
+    // Note: do not change, the run script depends on this to be able to spot crashes
     safe_write("\n\n!!! caught signal: ");
     safe_write(strsignal(sig));
     safe_write("\non line:\n");

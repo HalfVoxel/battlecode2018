@@ -1946,6 +1946,10 @@ int main() {
         updatePassableMap();
         updateStuckUnitMap();
 
+        // WIP
+        createUnits();
+        matchWorkers();
+
         auto t1 = millis();
         preprocessingComputationTime += t1-t0;
 
@@ -2025,6 +2029,7 @@ int main() {
         // it's not strictly necessary, but it helps.
         // pause and wait for the next turn.
         fflush(stdout);
+        fflush(stderr);
         gc.next_turn();
     }
     // I'm convinced C++ is the better option :)

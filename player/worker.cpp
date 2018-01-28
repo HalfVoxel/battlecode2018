@@ -1,8 +1,218 @@
 #include "worker.h"
 #include "pathfinding.hpp"
+#include "view.hpp"
+#include "hungarian.h"
+
 using namespace bc;
 using namespace std;
 
+struct KarboniteGroup {
+    vector<pii> tiles;
+    int totalValue;
+};
+
+void printMap (vector<vector<int>> values) {
+    for (int y = 0; y < values[0].size(); y++) {
+        for (int x = 0; x < values[0].size(); x++) {
+        }
+    }
+}
+
+vector<KarboniteGroup> groupKarbonite() {
+    vector<vector<bool>> covered(w, vector<bool>(h));
+    vector<vector<int>> groupIndices(w, vector<int>(h, -1));
+    int maxTimeCostPerGroup = 80;
+    int miningSpeed = 3;
+    vector<KarboniteGroup> groups;
+
+    for (int x = 0; x < w; x++) {
+        for (int y = 0; y < h; y++) {
+            if (covered[x][y] || karboniteMap.weights[x][y] == 0) continue;
+
+            KarboniteGroup group;
+            queue<pii> que1;
+            queue<pii> que2;
+            que1.push(pii(x, y));
+            int timeCost = 0;
+            vector<vector<bool>> covered2(w, vector<bool>(h));
+            covered2[x][y] = true;
+
+            while(timeCost < maxTimeCostPerGroup) {
+                if (que1.empty()) {
+                    swap(que1, que2);
+                }
+                if (que1.empty()) break;
+
+                int timeToMine = (karboniteMap.weights[x][y] + (miningSpeed-1)) / miningSpeed;
+                // Workers can move every second turn so we will have to spend at least 2 turns here
+                timeToMine = max(timeToMine, 2);
+                timeCost += timeToMine;
+                
+                pii p = que1.front();
+                que1.pop();
+                group.tiles.push_back(p);
+                covered[p.first][p.second] = true;
+                groupIndices[p.first][p.second] = groups.size();
+
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        int nx = p.first + dx;
+                        int ny = p.second + dy;
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                        if (covered2[nx][ny] || covered[nx][ny]) continue;
+
+                        // TODO: What about karbonite inside walls? That can be mined in some cases
+                        if (isinf(passableMap.weights[nx][ny])) continue;
+
+                        covered2[nx][ny] = true;
+
+                        // Try to avoid adding non-karbonite tiles to the group if possible
+                        if (karboniteMap.weights[nx][ny] == 0) {
+                            que2.push(pii(nx,ny));
+                        } else {
+                            que1.push(pii(nx,ny));
+                        }
+                    }
+                }
+            }
+
+            groups.push_back(group);
+        }
+    }
+
+    // print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return (int)karboniteMap.weights[x][y]; }));
+    // print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return max(0, groupIndices[x][y]); }));
+
+    return groups;
+}
+
+void matchWorkers() {
+    if (planet != Earth || ourTeam != 0) return;
+
+    auto groups = groupKarbonite();
+    cout << endl;
+    vector<BotWorker*> workers;
+    vector<Unit*> unitTargets;
+    for (auto& u : ourUnits) {
+        if (gc.has_unit(u.get_id()) && u.get_location().is_on_map()) {
+            if ((u.get_unit_type() == Factory || u.get_unit_type() == Rocket) && u.get_health() < u.get_max_health()) {
+                unitTargets.push_back(&u);
+            }
+
+            if (u.get_unit_type() == Worker) {
+                auto* botWorker = (BotWorker*)unitMap[u.get_id()];
+                assert(botWorker != nullptr);
+                workers.push_back(botWorker);
+            }
+        }
+    }
+
+    HungarianAlgorithm matcher;
+    Pathfinder pathfinder;
+    int numTargets = groups.size()*3 + unitTargets.size()*3;
+    if (numTargets == 0) {
+        for (auto* worker : workers) {
+            worker->calculatedTargetMap = PathfindingMap();
+        }
+        return;
+    }
+
+
+    vector<vector<double>> costMatrix (workers.size(), vector<double>(numTargets));
+    for (int wi = 0; wi < workers.size(); wi++) {
+        auto* worker = workers[wi];
+        auto targetMap = worker->getOriginalTargetMap();
+        auto costMap = worker->getCostMap();
+        auto pos = worker->unit.get_map_location();
+        auto distanceMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), costMap);
+        for (int i = 0; i < groups.size(); i++) {
+            auto score = 0;
+            for (auto p : groups[i].tiles) {
+                score += targetMap.weights[p.first][p.second] / (1 + distanceMap[p.first][p.second]);
+            }
+            // cout << "Score for " << wi << " " << i << ": " << score << endl;
+            costMatrix[wi][i*3 + 0] = score;
+            costMatrix[wi][i*3 + 1] = score/2;
+            costMatrix[wi][i*3 + 2] = score/4;
+        }
+        int offset = groups.size()*3;
+
+        for (int i = 0; i < unitTargets.size(); i++) {
+            auto pos2 = unitTargets[i]->get_map_location();
+            double score = 0;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    int nx = pos2.get_x() + dx;
+                    int ny = pos2.get_y() + dy;
+                    if (nx < 0 || nx < 0 || nx >= w || ny >= h) continue;
+                    score = max(score, targetMap.weights[nx][ny] / (1 + distanceMap[nx][ny]));
+                }
+            }
+
+            costMatrix[wi][offset + i*3 + 0] = score;
+            costMatrix[wi][offset + i*3 + 1] = score/2;
+            costMatrix[wi][offset + i*3 + 2] = score/4;
+        }
+    }
+
+
+    // Invert cost matrix
+    double mx = 0;
+    for (int i = 0; i < costMatrix.size(); i++) {
+        for (auto v : costMatrix[i]) mx = max(mx, v);
+    }
+
+    for (int i = 0; i < costMatrix.size(); i++) {
+        for (auto& v : costMatrix[i]) v = mx - v;
+    }
+
+    vector<int> assignment;
+    double cost = matcher.Solve(costMatrix, assignment);
+    assert(assignment.size() == workers.size());
+    for (int wi = 0; wi < assignment.size(); wi++) {
+        // cout << "Worker " << wi << " goes to " << assignment[wi] << endl;
+        auto* worker = workers[wi];
+        int target = assignment[wi];
+
+        if (target == -1) {
+            // No assigned target
+            worker->calculatedTargetMap = PathfindingMap();
+            continue;
+        }
+
+        assert(target >= 0);
+        PathfindingMap mask(w, h);
+        int offset = groups.size()*3;
+
+        if (target >= offset) {
+            // Move towards a building
+            target = (target - offset)/3;
+            assert(target < unitTargets.size());
+
+            auto pos2 = unitTargets[target]->get_map_location();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    int nx = pos2.get_x() + dx;
+                    int ny = pos2.get_y() + dy;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                    mask.weights[nx][ny] = 1;
+                }
+            }
+        } else {
+            // Move towards a group
+            target /= 3;
+            assert(target < groups.size());
+
+            for (auto p : groups[target].tiles) {
+                mask.weights[p.first][p.second] = 1;
+            }
+        }
+
+        worker->calculatedTargetMap = mask * worker->getOriginalTargetMap();
+    }
+    // cout << "Done" << endl;
+    // if (gc.get_round() == 63) exit(0);
+}
 
 // Returns score for factory placement
 // Will be on the order of magnitude of 1 for a well placed factory
@@ -57,6 +267,11 @@ double structurePlacementScore(int x, int y, UnitType unitType) {
 }
 
 PathfindingMap BotWorker::getTargetMap() {
+    if (calculatedTargetMap.weights.size() == 0) return getOriginalTargetMap();
+    return calculatedTargetMap;
+}
+
+PathfindingMap BotWorker::getOriginalTargetMap() {
     bool isHurt = (unit.get_health() < unit.get_max_health());
     MapReuseObject reuseObject(MapType::Target, unit.get_unit_type(), isHurt);
 

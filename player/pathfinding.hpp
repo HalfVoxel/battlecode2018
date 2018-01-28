@@ -311,6 +311,50 @@ struct Pathfinder {
         return hasPath;
     }
 
+    vector<vector<double>> getDistanceToAllTiles (int x0, int y0, const PathfindingMap& costs) {
+        static priority_queue<PathfindingEntry> pq;
+
+        int w = costs.w;
+        int h = costs.h;
+
+        // Make sure map is sane
+        assert(w <= MAX_MAP_SIZE);
+        assert(h <= MAX_MAP_SIZE);
+
+        vector<vector<double> > cost(w, vector<double>(h, numeric_limits<double>::infinity()));
+    
+        int dx[8]={1,1,1,0,0,-1,-1,-1};
+        int dy[8]={1,0,-1,1,-1,1,0,-1};
+        pq.push(PathfindingEntry(0.0, Position(x0, y0)));
+        cost[x0][y0] = 0;
+
+        while (!pq.empty()) {
+            auto currentEntry = pq.top();
+            auto currentPos = currentEntry.pos;
+            pq.pop();
+            if (currentEntry.cost > cost[currentPos.x][currentPos.y]) {
+                continue;
+            }
+            for (int i = 0; i < 8; i++) {
+                int x = currentPos.x + dx[i];
+                int y = currentPos.y + dy[i];
+                if (x < 0 || x >= w || y < 0 || y >= h) {
+                    continue;
+                }
+                double newCost = currentEntry.cost + costs.weights[x][y];
+                if (newCost < cost[x][y]) {
+                    cost[x][y] = newCost;
+                    pq.push(PathfindingEntry(newCost, Position(x, y)));
+                }
+            }
+        }
+
+        // Clear queue (required as it is reused for the next pathfinding call)
+        while(!pq.empty()) pq.pop();
+
+        return cost;
+    }
+
     vector<Position> getPath (const MapLocation& from, const PathfindingMap& values, const PathfindingMap& costs) {
         static vector<vector<double> > cost(MAX_MAP_SIZE, vector<double>(MAX_MAP_SIZE));
         static vector<vector<int> > version(MAX_MAP_SIZE, vector<int>(MAX_MAP_SIZE));
