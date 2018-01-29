@@ -23,6 +23,9 @@ double targetMapComputationTime;
 double costMapComputationTime;
 double attackComputationTime;;
 double unitInvalidationTime;
+double matchWorkersTime;
+double hungarianTime;
+double matchWorkersDijkstraTime;
 vector<vector<bool> > canSenseLocation;
 map<unsigned int, BotUnit*> unitMap;
 

@@ -84,7 +84,7 @@ vector<KarboniteGroup> groupKarbonite() {
         }
     }
 
-    if (gc.get_round() == debugRound) {
+    if ((int)gc.get_round() == debugRound) {
         print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return (int)karboniteMap.weights[x][y]; }));
         print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return max(0, groupIndices[x][y]); }));
     }
@@ -92,8 +92,12 @@ vector<KarboniteGroup> groupKarbonite() {
     return groups;
 }
 
+map<pair<int, int>, vector<vector<double> > > cachedTimeMaps;
+
 void matchWorkers() {
     if (planet != Earth) return;
+
+    auto matchWorkersStart = millis();
 
     // Cluster karbonite
     auto groups = groupKarbonite();
@@ -149,20 +153,29 @@ void matchWorkers() {
             auto targetMap = worker->getOriginalTargetMap();
             auto costMap = worker->getCostMap();
             auto pos = worker->unit.get_map_location();
+            auto distanceStart = millis();
             auto distanceMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), costMap);
 
-            // Workers take approximately 2 ticks to move one tile
-            // TODO: Can optimize to simply 2 times BFS-distance
-            PathfindingMap timeCost(w, h);
-            timeCost += 2;
-            for (int x = 0; x < w; x++) {
-                for (int y = 0; y < h; y++) {
-                    if (isinf(passableMap.weights[x][y])) timeCost.weights[x][y] = passableMap.weights[x][y];
+            auto positionKey = make_pair(pos.get_x(), pos.get_y());
+            vector<vector<double> >  timeMap;
+            if (cachedTimeMaps.count(positionKey))
+                timeMap = cachedTimeMaps[positionKey];
+            else {
+                // Workers take approximately 2 ticks to move one tile
+                // TODO: Can optimize to simply 2 times BFS-distance
+                PathfindingMap timeCost(w, h);
+                timeCost += 2;
+                for (int x = 0; x < w; x++) {
+                    for (int y = 0; y < h; y++) {
+                        if (isinf(passableMap.weights[x][y])) timeCost.weights[x][y] = passableMap.weights[x][y];
+                    }
                 }
-            }
 
-            auto timeMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), timeCost);
-            if (gc.get_round() == debugRound && wi == 0) {
+                timeMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), timeCost);
+                cachedTimeMaps[positionKey] = timeMap;
+            }
+            matchWorkersDijkstraTime += millis() - distanceStart;
+            if ((int)gc.get_round() == debugRound && wi == 0) {
                 
                 // print({ 0, 0, w - 1, h - 1 }, 0, 60, [&](int x, int y) { return distanceToInitialLocation[0].weights[x][y]; });
                 // print({ 0, 0, w - 1, h - 1 }, 0, 60, [&](int x, int y) { return distanceToInitialLocation[1].weights[x][y]; });
@@ -221,7 +234,7 @@ void matchWorkers() {
                 timeMatrix[wi][i*3 + 1] = minTime;
                 timeMatrix[wi][i*3 + 2] = minTime;
 
-                if (gc.get_round() == debugRound) {
+                if ((int)gc.get_round() == debugRound) {
                     cout << "Worker " << wi << " score for group " << i << ": " << score0 << " " << score1 << " " << score2 << endl;
                 }
             }
@@ -283,9 +296,11 @@ void matchWorkers() {
             for (auto& v : costMatrix[i]) v = mx - v;
         }
 
+        auto hungarianStart = millis();
         vector<int> assignment;
         matcher.Solve(costMatrix, assignment);
         assert(assignment.size() == workers.size());
+        hungarianTime += millis() - hungarianStart;
 
         // Reset
         for (int i = 0; i < (int)timeToReachTarget.size(); i++) timeToReachTarget[i] = (int)INF;
@@ -318,7 +333,7 @@ void matchWorkers() {
                 assert(target < (int)unitTargets.size());
                 auto pos2 = unitTargets[target]->get_map_location();
 
-                if (gc.get_round() == debugRound) {
+                if ((int)gc.get_round() == debugRound) {
                     cout << "Worker " << wi << " goes to a building at " << pos2.get_x() << " " << pos2.get_y() << endl;
                 }
 
@@ -335,7 +350,7 @@ void matchWorkers() {
                 target /= 3;
                 assert(target < (int)groups.size());
 
-                if (gc.get_round() == debugRound) {
+                if ((int)gc.get_round() == debugRound) {
                     cout << "Worker " << wi << " goes to group " << target << " with cost " << costMatrix[wi][target] << endl;
                 }
 
@@ -347,6 +362,8 @@ void matchWorkers() {
             worker->calculatedTargetMap = mask * worker->getOriginalTargetMap();
         }
     }
+
+    matchWorkersTime += millis() - matchWorkersStart;
     // cout << "Done" << endl;
     //if (gc.get_round() == debugRound) exit(0);
     // exit(0);

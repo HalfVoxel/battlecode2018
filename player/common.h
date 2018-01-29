@@ -28,6 +28,9 @@ extern double targetMapComputationTime;
 extern double costMapComputationTime;
 extern double attackComputationTime;
 extern double unitInvalidationTime;
+extern double matchWorkersTime;
+extern double matchWorkersDijkstraTime;
+extern double hungarianTime;
 extern std::map<unsigned int, BotUnit*> unitMap;
 extern std::vector<std::vector<bool> > canSenseLocation;
 
