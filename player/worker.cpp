@@ -9,6 +9,7 @@ using namespace std;
 int miningSpeed = 3;
 int buildSpeed = 5;
 int repairSpeed = 10;
+int debugRound = 1;
 
 struct KarboniteGroup {
     vector<pii> tiles;
@@ -83,7 +84,7 @@ vector<KarboniteGroup> groupKarbonite() {
         }
     }
 
-    if (gc.get_round() == 11) {
+    if (gc.get_round() == debugRound) {
         print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return (int)karboniteMap.weights[x][y]; }));
         print({ 0, 0, w - 1, h - 1 }, colorsByID([&](int x, int y) { return groupIndices[x][y] + 1; }), labels([&](int x, int y) { return max(0, groupIndices[x][y]); }));
     }
@@ -94,8 +95,10 @@ vector<KarboniteGroup> groupKarbonite() {
 void matchWorkers() {
     if (planet != Earth) return;
 
+    // Cluster karbonite
     auto groups = groupKarbonite();
-    cout << endl;
+    
+    // Find all our workers and structures which can be built or repaired
     vector<BotWorker*> workers;
     vector<Unit*> unitTargets;
     for (auto& u : ourUnits) {
@@ -128,7 +131,8 @@ void matchWorkers() {
         return;
     }
 
-    vector<int> timeToReachTarget(numTargets, 10000);
+    const double INF = 1000000;
+    vector<int> timeToReachTarget(numTargets, (int)INF);
 
     int numIterations = 2;
 
@@ -158,7 +162,7 @@ void matchWorkers() {
             }
 
             auto timeMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), timeCost);
-            if (gc.get_round() == 11 && wi == 0) {
+            if (gc.get_round() == debugRound && wi == 0) {
                 
                 // print({ 0, 0, w - 1, h - 1 }, 0, 60, [&](int x, int y) { return distanceToInitialLocation[0].weights[x][y]; });
                 // print({ 0, 0, w - 1, h - 1 }, 0, 60, [&](int x, int y) { return distanceToInitialLocation[1].weights[x][y]; });
@@ -176,11 +180,18 @@ void matchWorkers() {
             for (int i = 0; i < (int)groups.size(); i++) {
                 double score = 0;
                 double totalKarbonite = 0;
-                double minTime = 1000000;
+                double minTime = INF;
                 for (auto p : groups[i].tiles) {
                     minTime = min(minTime, timeMap[p.first][p.second]);
                     totalKarbonite += karboniteMap.weights[p.first][p.second];
                 }
+                if (minTime >= INF) {
+                    costMatrix[wi][i*3 + 0] = -INF;
+                    costMatrix[wi][i*3 + 1] = -INF;
+                    costMatrix[wi][i*3 + 2] = -INF;
+                    continue;
+                }
+
                 assert(totalKarbonite > 0);
 
                 // How many ticks the best worker will have already mined at this spot before we get there
@@ -210,7 +221,7 @@ void matchWorkers() {
                 timeMatrix[wi][i*3 + 1] = minTime;
                 timeMatrix[wi][i*3 + 2] = minTime;
 
-                if (gc.get_round() == 11) {
+                if (gc.get_round() == debugRound) {
                     cout << "Worker " << wi << " score for group " << i << ": " << score0 << " " << score1 << " " << score2 << endl;
                 }
             }
@@ -219,7 +230,7 @@ void matchWorkers() {
             for (int i = 0; i < (int)unitTargets.size(); i++) {
                 auto pos2 = unitTargets[i]->get_map_location();
                 double score = 0;
-                double minTime = 1000000;
+                double minTime = INF;
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dy = -1; dy <= 1; dy++) {
                         int nx = pos2.get_x() + dx;
@@ -228,6 +239,13 @@ void matchWorkers() {
                         score = max(score, targetMap.weights[nx][ny] / (1 + distanceMap[nx][ny]));
                         minTime = min(minTime, timeMap[nx][ny]);
                     }
+                }
+
+                if (minTime >= INF) {
+                    costMatrix[wi][i*3 + 0] = -INF;
+                    costMatrix[wi][i*3 + 1] = -INF;
+                    costMatrix[wi][i*3 + 2] = -INF;
+                    continue;
                 }
 
                 auto totalHealthToRepair = unitTargets[i]->get_max_health() - unitTargets[i]->get_health();
@@ -270,14 +288,15 @@ void matchWorkers() {
         assert(assignment.size() == workers.size());
 
         // Reset
-        for (int i = 0; i < (int)timeToReachTarget.size(); i++) timeToReachTarget[i] = 100000;
+        for (int i = 0; i < (int)timeToReachTarget.size(); i++) timeToReachTarget[i] = (int)INF;
 
         for (int wi = 0; wi < (int)assignment.size(); wi++) {
             // cout << "Worker " << wi << " goes to " << assignment[wi] << endl;
             auto* worker = workers[wi];
             int target = assignment[wi];
 
-            if (target == -1) {
+            if (target == -1 || costMatrix[wi][target] >= INF) {
+                cout << "No target " << target << endl;
                 // No assigned target
                 worker->calculatedTargetMap = PathfindingMap();
                 continue;
@@ -299,7 +318,7 @@ void matchWorkers() {
                 assert(target < (int)unitTargets.size());
                 auto pos2 = unitTargets[target]->get_map_location();
 
-                if (gc.get_round() == 11) {
+                if (gc.get_round() == debugRound) {
                     cout << "Worker " << wi << " goes to a building at " << pos2.get_x() << " " << pos2.get_y() << endl;
                 }
 
@@ -316,8 +335,8 @@ void matchWorkers() {
                 target /= 3;
                 assert(target < (int)groups.size());
 
-                if (gc.get_round() == 11) {
-                    cout << "Worker " << wi << " goes to group " << target << endl;
+                if (gc.get_round() == debugRound) {
+                    cout << "Worker " << wi << " goes to group " << target << " with cost " << costMatrix[wi][target] << endl;
                 }
 
                 for (auto p : groups[target].tiles) {
@@ -329,7 +348,8 @@ void matchWorkers() {
         }
     }
     // cout << "Done" << endl;
-    //if (gc.get_round() == 11) exit(0);
+    //if (gc.get_round() == debugRound) exit(0);
+    // exit(0);
 }
 
 // Returns score for factory placement
