@@ -9,7 +9,7 @@ using namespace std;
 int miningSpeed = 3;
 int buildSpeed = 5;
 int repairSpeed = 10;
-int debugRound = 1;
+int debugRound = -1;
 
 struct KarboniteGroup {
     vector<pii> tiles;

@@ -2016,7 +2016,9 @@ int main() {
                 anyTickDone |= tickUnits(false, 1 << (int)Worker);
             }
             firstIteration = false;
-            coordinateRangerAttacks();
+            if (!veryLowTimeRemaining) {
+                coordinateRangerAttacks();
+            }
 
             if (!anyTickDone) break;
 
@@ -2032,7 +2034,8 @@ int main() {
         double turnTime = millis() - t0;
         totalTurnTime += turnTime;
 
-        if (!lowTimeRemaining) {
+        //if (!lowTimeRemaining) {
+        if (true) {
             auto t6 = millis();
             cout << "Research: " << (t6 - t5) << endl;
 
