@@ -7,6 +7,7 @@ extern PathfindingMap karboniteMap;
 extern PathfindingMap fuzzyKarboniteMap;
 extern PathfindingMap enemyInfluenceMap;
 extern PathfindingMap workerProximityMap;
+extern PathfindingMap workerAdditiveMap;
 extern PathfindingMap workersNextToMap;
 extern PathfindingMap structureProximityMap;
 extern PathfindingMap damagedStructureMap;

@@ -6,6 +6,7 @@ PathfindingMap karboniteMap;
 PathfindingMap fuzzyKarboniteMap;
 PathfindingMap enemyInfluenceMap;
 PathfindingMap workerProximityMap;
+PathfindingMap workerAdditiveMap;
 PathfindingMap workersNextToMap;
 PathfindingMap structureProximityMap;
 PathfindingMap damagedStructureMap;

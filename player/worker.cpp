@@ -360,6 +360,8 @@ double structurePlacementScore(int x, int y, UnitType unitType) {
     double score = nearbyTileScore;
     // Score will go to zero when there is more than 50 karbonite on the tile
     score -= karboniteMap.weights[x][y] / 50.0;
+    
+    score += sqrt(workerAdditiveMap.weights[x][y]) * 0.3;
 
     auto nearbyUnits = gc.sense_nearby_units(pos, 2);
     double nearbyStructures = 0;
@@ -515,7 +517,7 @@ void BotWorker::tick() {
     }
 
     double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
-    double replicateScore = karbonitePerWorker * 0.008 + 2.5 / (state.typeCount[Worker] + 0.1);
+    double replicateScore = karbonitePerWorker * 0.01 + 5.0 / (state.typeCount[Worker] + 0.1);
     if (state.typeCount[Worker] > 100 || (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth)) {
         replicateScore = -1;
     }
@@ -532,7 +534,7 @@ void BotWorker::tick() {
                 if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 800 > state.remainingKarboniteOnEarth)
                     score = 0;
                 if (state.typeCount[Factory] < 2)
-                    score += 12.0 / (15.0 + initialDistanceToEnemyLocation);
+                    score += 12.0 / (25.0 + initialDistanceToEnemyLocation);
 
                 score *= structurePlacementScore(x, y, Factory);
 

@@ -20,6 +20,7 @@ vector<vector<double> > knightTargetInfluence;
 vector<vector<double> > healerProximityInfluence;
 vector<vector<double> > healerInfluence;
 vector<vector<double> > workerProximityInfluence;
+vector<vector<double> > workerAdditiveInfluence;
 vector<vector<double> > factoryProximityInfluence;
 vector<vector<double> > rocketProximityInfluence;
 vector<vector<double> > rangerProximityInfluence;
@@ -180,6 +181,15 @@ void initInfluence() {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
             workerProximityInfluence[dx+r][dy+r] = 0.05 / (1.0 + dis2);
+        }
+    }
+
+    r = 6;
+    workerAdditiveInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx*dx + dy*dy;
+            workerAdditiveInfluence[dx+r][dy+r] = 4.0 / (4.0 + dis2);
         }
     }
     

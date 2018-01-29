@@ -545,12 +545,14 @@ void selectTravellersForRocket(Unit& unit) {
         auto unitType = gc.get_unit(candidates[i].second).get_unit_type();
         if (unitType == Worker) {
             if (hasWorker && launchedWorkerCount) {
+                ++remainingTravellers;
                 continue;
             }
             hasWorker = true;
         }
         if (unitType == Healer) {
             if (hasHealers >= 3) {
+                ++remainingTravellers;
                 continue;
             }
             ++hasHealers;
@@ -1010,6 +1012,17 @@ void updateWorkerMaps() {
             }
         }
     }
+
+    workerAdditiveMap = PathfindingMap(w, h);
+    for (auto& u : ourUnits) {
+        if (u.get_location().is_on_map()) {
+            if (u.get_unit_type() == Worker) {
+                auto pos = u.get_location().get_map_location();
+                workerAdditiveMap.addInfluence(workerAdditiveInfluence, pos.get_x(), pos.get_y());
+            }
+        }
+    }
+
     workersNextToMap = PathfindingMap(w, h);
     for (auto& u : ourUnits) {
         if (u.get_location().is_on_map()) {
@@ -1084,14 +1097,14 @@ void updateDamagedStructuresMap() {
                         continue;
                     }
                     if (unit.structure_is_built()) {
-                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 2 * (2.0 - remainingLife));
+                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 5 * (2.0 - remainingLife));
                     }
                     else {
                         double score = 3 * (1.5 + remainingLife);
                         if (workersNextToMap.weights[unitX][unitY] >= 5) {
                             score /= 1 + 0.05 + workersNextToMap.weights[unitX][unitY];
                         }
-                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 6 * (1.5 + 0.5 * remainingLife));
+                        damagedStructureMap.weights[x][y] = max(damagedStructureMap.weights[x][y], 15 * (1.5 + 0.5 * remainingLife));
                     }
                 }
             }
