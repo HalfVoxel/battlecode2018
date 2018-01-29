@@ -147,6 +147,9 @@ void BotUnit::moveToLocation(MapLocation nextLocation) {
                 auto u = gc.sense_unit_at_location(nextLocation);
                 if (u.get_team() == unit.get_team() && (u.get_unit_type() == Factory || u.get_unit_type() == Rocket)) {
                     if (gc.can_load(u.get_id(), unit.get_id())) {
+                        if (u.get_unit_type() == Rocket && unit.get_unit_type() == Worker) {
+                            ++launchedWorkerCount;
+                        }
                         passableMap.weights[unitMapLocation.get_x()][unitMapLocation.get_y()] = 1;
                         gc.load(u.get_id(), unit.get_id());
                         invalidate_unit(u.get_id());

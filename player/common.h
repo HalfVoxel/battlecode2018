@@ -41,6 +41,7 @@ extern int h;
 extern int turnsSinceLastFight;
 extern bool lowTimeRemaining;
 extern bool hasOvercharge;
+extern int launchedWorkerCount;
 
 extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
 

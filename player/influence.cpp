@@ -210,7 +210,7 @@ void initInfluence() {
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
             int dis2 = dx*dx + dy*dy;
-            factoryProximityInfluence[dx+r][dy+r] = 0.1 / (1.0 + dis2);
+            factoryProximityInfluence[dx+r][dy+r] = 0.01 / (1.0 + dis2);
             if (dis2 <= 2) {
                 factoryProximityInfluence[dx+r][dy+r] = 0.4;
             }
