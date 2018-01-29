@@ -16,8 +16,8 @@ struct KarboniteGroup {
 };
 
 void printMap (vector<vector<int>> values) {
-    for (int y = 0; y < values[0].size(); y++) {
-        for (int x = 0; x < values[0].size(); x++) {
+    for (int y = 0; y < (int)values[0].size(); y++) {
+        for (int x = 0; x < (int)values[0].size(); x++) {
         }
     }
 }
@@ -140,7 +140,7 @@ void matchWorkers() {
         // timeMatrix[i][j] = turns for worker i to reach target j
         vector<vector<int>> timeMatrix (workers.size(), vector<int>(numTargets));
 
-        for (int wi = 0; wi < workers.size(); wi++) {
+        for (int wi = 0; wi < (int)workers.size(); wi++) {
             auto* worker = workers[wi];
             auto targetMap = worker->getOriginalTargetMap();
             auto costMap = worker->getCostMap();
@@ -173,7 +173,7 @@ void matchWorkers() {
                 // if (ourTeam == 1) exit(0);
             }
 
-            for (int i = 0; i < groups.size(); i++) {
+            for (int i = 0; i < (int)groups.size(); i++) {
                 double score = 0;
                 double totalKarbonite = 0;
                 double minTime = 1000000;
@@ -216,7 +216,7 @@ void matchWorkers() {
             }
             int offset = groups.size()*3;
 
-            for (int i = 0; i < unitTargets.size(); i++) {
+            for (int i = 0; i < (int)unitTargets.size(); i++) {
                 auto pos2 = unitTargets[i]->get_map_location();
                 double score = 0;
                 double minTime = 1000000;
@@ -257,22 +257,22 @@ void matchWorkers() {
 
         // Invert cost matrix
         double mx = 0;
-        for (int i = 0; i < costMatrix.size(); i++) {
+        for (int i = 0; i < (int)costMatrix.size(); i++) {
             for (auto v : costMatrix[i]) mx = max(mx, v);
         }
 
-        for (int i = 0; i < costMatrix.size(); i++) {
+        for (int i = 0; i < (int)costMatrix.size(); i++) {
             for (auto& v : costMatrix[i]) v = mx - v;
         }
 
         vector<int> assignment;
-        double cost = matcher.Solve(costMatrix, assignment);
+        matcher.Solve(costMatrix, assignment);
         assert(assignment.size() == workers.size());
 
         // Reset
-        for (int i = 0; i < timeToReachTarget.size(); i++) timeToReachTarget[i] = 100000;
+        for (int i = 0; i < (int)timeToReachTarget.size(); i++) timeToReachTarget[i] = 100000;
 
-        for (int wi = 0; wi < assignment.size(); wi++) {
+        for (int wi = 0; wi < (int)assignment.size(); wi++) {
             // cout << "Worker " << wi << " goes to " << assignment[wi] << endl;
             auto* worker = workers[wi];
             int target = assignment[wi];
@@ -296,7 +296,7 @@ void matchWorkers() {
             if (target >= offset) {
                 // Move towards a building
                 target = (target - offset)/3;
-                assert(target < unitTargets.size());
+                assert(target < (int)unitTargets.size());
                 auto pos2 = unitTargets[target]->get_map_location();
 
                 if (gc.get_round() == 11) {
@@ -314,7 +314,7 @@ void matchWorkers() {
             } else {
                 // Move towards a group
                 target /= 3;
-                assert(target < groups.size());
+                assert(target < (int)groups.size());
 
                 if (gc.get_round() == 11) {
                     cout << "Worker " << wi << " goes to group " << target << endl;

@@ -501,10 +501,14 @@ void selectTravellersForRocket(Unit& unit) {
         return;
     }
     bool hasWorker = false;
+    int hasHealers = 0;
     for (auto id : unit.get_structure_garrison()) {
         auto u = gc.get_unit(id);
         if (u.get_unit_type() == Worker) {
             hasWorker = true;
+        }
+        if (u.get_unit_type() == Healer) {
+            ++hasHealers;
         }
     }
     int remainingTravellers = unit.get_structure_max_capacity() - unit.get_structure_garrison().size();
@@ -538,11 +542,18 @@ void selectTravellersForRocket(Unit& unit) {
     }
     sort(candidates.begin(), candidates.end());
     for (int i = 0; i < min((int) candidates.size(), remainingTravellers); i++) {
-        if (gc.get_unit(candidates[i].second).get_unit_type() == Worker) {
+        auto unitType = gc.get_unit(candidates[i].second).get_unit_type();
+        if (unitType == Worker) {
             if (hasWorker && launchedWorkerCount) {
                 continue;
             }
             hasWorker = true;
+        }
+        if (unitType == Healer) {
+            if (hasHealers >= 3) {
+                continue;
+            }
+            ++hasHealers;
         }
         unitShouldGoToRocket[candidates[i].second].push_back(unit.get_id());
     }
