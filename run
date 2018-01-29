@@ -139,7 +139,8 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
         winRegex = re.compile(r"Winner is player (\d)")
         sizeRegex = re.compile(r"MAP IS (\d+)x(\d+)")
         roundRegex = re.compile(r".* Round: (\d+)")
-        crashRegex = re.compile(r"\[(\w+):(\w+)\] !!! caught signal")
+        crashRegex = re.compile(r"\[(\w+):(\w+)\] (!!! caught signal|PLAYER HAS TIMED OUT!!!)")
+        crashRegex2 = re.compile(r".*Player { team: (.+), planet: (.*) } has not sent message for 50 seconds, assuming they're dead")
         replayRegex = re.compile(r"Saving replay to (.*)\n", re.DOTALL)
 
         mapIndex = 0
@@ -159,6 +160,7 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
                 if crashMatch is not None:
                     planet = crashMatch.group(1)
                     color = crashMatch.group(2)
+                    crashType = crashMatch.group(3)
                     winningTeam = None
                     if color == "red":
                         winningTeam = "B"
@@ -175,7 +177,36 @@ def run(teamA, teamB, maps, quiet, seed, teamAdna, teamBdna, workingDir):
                         if replayMatch is not None:
                             replayPath = replayMatch.group(1)
 
-                    yield (winningTeam, lastRound, "(opponent crashed on " + str(planet) + ")", mapName, mapSize, log, replayPath)
+                    if crashType == "!!! caught signal":
+                        crashMsg = "(opponent crashed on " + str(planet) + ")"
+                    else:
+                        crashMsg = "(opponent timed out on " + str(planet) + ")"
+
+                    yield (winningTeam, lastRound, crashMsg, mapName, mapSize, log, replayPath)
+                    break
+
+                crashMatch = crashRegex2.search(line)
+                if crashMatch is not None:
+                    planet = crashMatch.group(2)
+                    color = crashMatch.group(1)
+                    winningTeam = None
+                    if color == "Red":
+                        winningTeam = "B"
+                    elif color == "Blue":
+                        winningTeam = "A"
+                    else:
+                        print("Couldn't parse crasher: " + color)
+                        continue
+
+                    # Eat remaining
+                    for line2 in gen:
+                        log.write(line2)
+                        replayMatch = replayRegex.search(line2)
+                        if replayMatch is not None:
+                            replayPath = replayMatch.group(1)
+
+                    crashMsg = "(opponent timed out on " + str(planet) + ")"
+                    yield (winningTeam, lastRound, crashMsg, mapName, mapSize, log, replayPath)
                     break
 
                 roundMatch = roundRegex.search(line)
