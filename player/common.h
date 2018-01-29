@@ -43,6 +43,7 @@ extern int w;
 extern int h;
 extern int turnsSinceLastFight;
 extern bool lowTimeRemaining;
+extern bool veryLowTimeRemaining;
 extern bool hasOvercharge;
 extern int launchedWorkerCount;
 

@@ -274,6 +274,9 @@ struct BotHealer : BotUnit {
             }
         }
 
+        if (veryLowTimeRemaining)
+            return;
+
         auto nextLocation = getNextLocation();
         moveToLocation(nextLocation);
 
@@ -380,7 +383,7 @@ struct BotFactory : BotUnit {
             }
         }
 
-        if (gc.get_round() >= 742) {
+        if (gc.get_round() >= 737) {
             // Don't produce any more units as they won't have time to get into a rocket
             return;
         }
@@ -1916,7 +1919,8 @@ int main() {
         printf("Round: %d\n", round);
         int timeLeft = gc.get_time_left_ms();
         // If less than 0.5 seconds left, then enter low power mode
-        lowTimeRemaining = timeLeft < 500;
+        lowTimeRemaining = timeLeft < 4000;
+        veryLowTimeRemaining = timeLeft < 1000;
         if (lowTimeRemaining) {
             printf("LOW TIME REMAINING\n");
         }
@@ -1987,7 +1991,9 @@ int main() {
             auto t2 = millis();
             createUnits();
             cout << "We have " << ourUnits.size() << " units" << endl;
-            coordinateMageAttacks();
+            if (!veryLowTimeRemaining) {
+                coordinateMageAttacks();
+            }
             bool anyTickDone = tickUnits(firstIteration, 1 << (int)Healer);
 
             anyTickDone |= tickUnits(false);
@@ -1997,7 +2003,7 @@ int main() {
             
             executeMacroObjects();
 
-            if (firstIteration) {
+            if (firstIteration && !veryLowTimeRemaining) {
                 workersMove = true;
                 updateFuzzyKarboniteMap();
                 findUnits();
@@ -2008,8 +2014,8 @@ int main() {
                 reuseObject.isHurt = true;
                 reusableMaps.erase(reuseObject);
                 anyTickDone |= tickUnits(false, 1 << (int)Worker);
-                firstIteration = false;
             }
+            firstIteration = false;
             coordinateRangerAttacks();
 
             if (!anyTickDone) break;
