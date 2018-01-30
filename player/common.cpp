@@ -53,6 +53,7 @@ int lastFactoryBlueprintTurn = -1;
 int lastRocketBlueprintTurn = -1;
 int initialDistanceToEnemyLocation = 1000;
 bool workersMove;
+int contestedKarbonite = 0;
 
 void invalidate_unit(unsigned int id) {
 	auto t0 = millis();

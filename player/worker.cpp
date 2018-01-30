@@ -587,12 +587,6 @@ void BotWorker::tick() {
         });
     }
 
-    double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / state.typeCount[Worker];
-    double replicateScore = karbonitePerWorker * 0.01 + 5.0 / (state.typeCount[Worker] + 0.1);
-    if (state.typeCount[Worker] > 100 || (karbonitePerWorker < 70 && state.typeCount[Worker] >= 10 && planet == Earth)) {
-        replicateScore = -1;
-    }
-
     if (planet == Earth) {
         for (int i = 0; i < 8; i++) {
             Direction d = (Direction) i;
@@ -657,18 +651,66 @@ void BotWorker::tick() {
             }
         }
     }
+}
 
-    if(unit.get_ability_heat() < 10 && unit.get_location().is_on_map() && (planet == Earth || state.earthTotalUnitCount == 0 || state.typeCount[Worker] < 8 || gc.get_round() > 740) && replicateScore > bestMacroObjectScore - 0.1) {
-        auto nextLocation = getNextLocation(unitMapLocation, false);
-
-        if (nextLocation != unitMapLocation) {
-            auto d = unitMapLocation.direction_to(nextLocation);
-            double score = replicateScore + 0.001 * log(1.1 + pathfindingScore);
-            macroObjects.emplace_back(score, unit_type_get_replicate_cost(), 2, [=]{
-                if(gc.can_replicate(id, d)) {
-                    gc.replicate(id, d);
-                }
-            });
+void addWorkerActions () {
+    for (int replicateCount = 1; replicateCount <= 7; replicateCount++) {
+        int workerCount = state.typeCount[Worker] + replicateCount;
+        double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / workerCount;
+        double contestedKarbonitePerWorker = (contestedKarbonite + 0.0) / workerCount;
+        double replicateScore = karbonitePerWorker * 0.01 + contestedKarbonitePerWorker * 0.01 + 5.0 / (workerCount + 0.1);
+        if (workerCount > 100 || (karbonitePerWorker < 70 && workerCount >= 10 && planet == Earth)) {
+            continue;
         }
+
+        // Don't replicate on Mars unless some criteria are met
+        if (planet != Earth && state.earthTotalUnitCount > 0 && workerCount >= 8 && gc.get_round() <= 740) {
+            continue;
+        }
+
+        macroObjects.emplace_back(replicateScore, unit_type_get_replicate_cost(), 2, [=]{
+            // Find best worker to replicate
+            double bestScore = -10000;
+            int bestID = -1;
+            Direction bestDirection = North;
+
+            for (auto& u : ourUnits) {
+                if(u.get_unit_type() == Worker && u.get_location().is_on_map() && u.get_ability_heat() < 10) {
+                    BotWorker* botunit = (BotWorker*)unitMap[u.get_id()];
+                    if (botunit != nullptr) {
+                        auto unitID = u.get_id();
+                        auto unitMapLocation = u.get_map_location();
+                        auto nextLocation = botunit->getNextLocation(unitMapLocation, false);
+                        auto dir = unitMapLocation.direction_to(nextLocation);
+                        double score = botunit->pathfindingScore;
+                        if (score > bestScore) {
+                            if (nextLocation != unitMapLocation && gc.can_replicate(unitID, dir)) {
+                                bestScore = score;
+                                bestID = unitID;
+                                bestDirection = dir;
+                            } else {
+                                // Replicate in the direction with the most karbonite
+                                for (int d = 0; d < 8; d++) {
+                                    if (gc.can_replicate(unitID, (Direction)d)) {
+                                        nextLocation = unitMapLocation.add((Direction)d);
+                                        double score2 = score + 0.001*karboniteMap.weights[nextLocation.get_x()][nextLocation.get_y()];
+                                        if (score2 > bestScore) {
+                                            bestScore = score2;
+                                            bestID = unitID;
+                                            bestDirection = (Direction)d;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bestID != -1) {
+                gc.replicate(bestID, bestDirection);
+                state.typeCount[Worker]++;
+            }
+        });
     }
 }

@@ -903,6 +903,7 @@ void updateKarboniteMap() {
 }
 
 void updateFuzzyKarboniteMap() {
+    contestedKarbonite = 0;
     fuzzyKarboniteMap = PathfindingMap(w, h);
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
@@ -921,6 +922,12 @@ void updateFuzzyKarboniteMap() {
             }
             if (planet == Earth) {
                 int disDiff = distanceToInitialLocation[enemyTeam].weights[i][j] - distanceToInitialLocation[ourTeam].weights[i][j];
+                if (disDiff <= 3 && disDiff >= -3) {
+                    contestedKarbonite += karboniteMap.weights[i][j];
+                } else if (disDiff <= 4 && disDiff >= -4) {
+                    contestedKarbonite += karboniteMap.weights[i][j] * 0.5f;
+                }
+
                 if (disDiff <= 6) {
                     fuzzyKarboniteMap.weights[i][j] *= 1.2;
                 }
@@ -931,6 +938,7 @@ void updateFuzzyKarboniteMap() {
             }
         }
     }
+    cout << "ContestedKarbonite: " << contestedKarbonite << endl;
     fuzzyKarboniteMap /= ourStartingPositionMap;
 }
 
@@ -2046,6 +2054,7 @@ int main() {
 
             anyTickDone |= tickUnits(false);
             if (hasOvercharge) doOvercharge();
+            addWorkerActions();
             auto t3 = millis();
             cout << "Iteration: " << (t3 - t2) << endl;
             

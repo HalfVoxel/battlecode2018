@@ -49,6 +49,10 @@ extern bool hasOvercharge;
 extern int launchedWorkerCount;
 extern int timesStuck;
 
+// Amount of karbonite that is contested. I.e close to both our team and the opponent team.
+// We want to replicate more if there is a lot of contested karbonite to make sure we get it before the enemy.
+extern int contestedKarbonite;
+
 extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
 
 extern bool existsPathToEnemy;

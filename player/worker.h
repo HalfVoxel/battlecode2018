@@ -16,3 +16,4 @@ struct BotWorker : BotUnit {
 };
 
 void matchWorkers();
+void addWorkerActions();
