@@ -125,11 +125,12 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     // I think this should work, but untested:
     // ucontext_t *context = (ucontext_t *)arg;
     // addr2line((void*)context->uc_mcontext->__ss.__rip);
+    safe_write("(unavailable on macOS)\n");
 #else
     ucontext_t *context = (ucontext_t *)arg;
     addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
 #endif
-#ifdef CUSTOM_BACKTRACE
+#if defined(CUSTOM_BACKTRACE) || !defined(NDEBUG)
     print_trace();
 #endif
     safe_write("flushing stdio\n");

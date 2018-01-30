@@ -20,7 +20,7 @@ step() {
     $@
 }
 
-DEPLOY_CC='g++ -std=c++11 -O2 -g -rdynamic -DNDEBUG -fno-omit-frame-pointer -no-pie'
+DEPLOY_CC='g++ -std=c++11 -O2 -g -rdynamic -DNDEBUG -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie'
 
 BC_DEPLOY=0
 if [ "$BC_DEPLOY" = '2' ]; then
@@ -30,5 +30,9 @@ if [ "$BC_DEPLOY" = '2' ]; then
 elif [ "$BC_DEPLOY" = '1' ]; then
     step $DEPLOY_CC everything.cpp -c $INCLUDES
 else
-    step g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+    if [ "$BC_PLATFORM" = 'DARWIN' ]; then
+        step g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DBACKTRACE -o main $LIBRARIES $INCLUDES
+    else
+        step g++ -std=c++11 -O2 -Wall -g -rdynamic everything.cpp -DCUSTOM_BACKTRACE -fno-omit-frame-pointer -no-pie -o main $LIBRARIES $INCLUDES
+    fi
 fi
