@@ -393,7 +393,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                             factor = 2.0;
                             break;
                         case Knight:
-                            factor = 0.8;
+                            factor = 1.2;
                             break;
                         case Healer:
                             factor = 0.9;

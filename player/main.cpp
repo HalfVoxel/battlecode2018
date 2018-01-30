@@ -403,11 +403,11 @@ struct BotFactory : BotUnit {
                     score *= 0.7;
                 score /= state.typeCount[Knight] + 1.0;
                 if (nearbyEnemiesWeight > 0.7)
-                    score += 0.1;
+                    score += 0.3;
                 if (nearbyEnemiesWeight > 0.8)
-                    score += 0.6;
+                    score += 1.0;
                 if (nearbyEnemiesWeight > 0.9) {
-                    score += 1.5;
+                    score += 2.0;
                     if (gc.get_round() < 120)
                         score += 1;
                 }
