@@ -1987,14 +1987,14 @@ int main() {
         createUnits();
         matchWorkers();
 
-        if (!hasUnstuckUnit && state.typeCount[Rocket] == 0) {
+        if (!hasUnstuckUnit && state.typeCount[Rocket] == 0 && planet == Earth) {
             bool hasDisintegrated = false;
             for (int iteration = 0; iteration < 2; ++iteration) {
                 for (auto& unit : ourUnits) {
                     if (unit.get_unit_type() != Worker && (iteration == 0 || unit.get_unit_type() != Factory || !unit.structure_is_built())) {
                         continue;
                     }
-                    if (rand()%2)
+                    if (rand()%10)
                         continue;
                     if (!unit.get_location().is_on_map())
                         continue;
