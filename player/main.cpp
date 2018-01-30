@@ -2049,6 +2049,7 @@ int main() {
             cout << "Preprocessing time: " << std::round(preprocessingComputationTime) << endl;
             cout << "Match workers time: " << std::round(matchWorkersTime) << endl;
             cout << "  Dijkstra time: " << std::round(matchWorkersDijkstraTime) << endl;
+            cout << "  Dijkstra2 time: " << std::round(matchWorkersDijkstraTime2) << endl;
             cout << "  Hungarian time: " << std::round(hungarianTime) << endl;
             for (auto it : timeUsed) {
                 cout << unitTypeToString[it.first] << ": " << std::round(it.second) << endl;

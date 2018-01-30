@@ -26,6 +26,7 @@ double unitInvalidationTime;
 double matchWorkersTime;
 double hungarianTime;
 double matchWorkersDijkstraTime;
+double matchWorkersDijkstraTime2;
 vector<vector<bool> > canSenseLocation;
 map<unsigned int, BotUnit*> unitMap;
 

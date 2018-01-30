@@ -2,6 +2,7 @@
 #include "pathfinding.hpp"
 #include "view.hpp"
 #include "hungarian.h"
+#include "maps.h"
 
 using namespace bc;
 using namespace std;
@@ -140,6 +141,16 @@ void matchWorkers() {
 
     int numIterations = 2;
 
+    auto t0 = millis();
+    vector<vector<vector<double>>> distanceMaps(workers.size());
+    for (int wi = 0; wi < (int)workers.size(); wi++) {
+        auto* worker = workers[wi];
+        auto pos = worker->unit.get_map_location();
+        auto costMap = worker->getCostMap();
+        distanceMaps[wi] = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), costMap);
+    }
+    matchWorkersDijkstraTime2 += millis() - t0;
+
     for (int it=0; it < numIterations; it++) {
         bool finalIteration = it == numIterations - 1;
         // costMatrix[i][j] = cost for worker i to be assigned target j
@@ -151,10 +162,9 @@ void matchWorkers() {
         for (int wi = 0; wi < (int)workers.size(); wi++) {
             auto* worker = workers[wi];
             auto targetMap = worker->getOriginalTargetMap();
-            auto costMap = worker->getCostMap();
             auto pos = worker->unit.get_map_location();
             auto distanceStart = millis();
-            auto distanceMap = pathfinder.getDistanceToAllTiles(pos.get_x(), pos.get_y(), costMap);
+            auto& distanceMap = distanceMaps[wi];
 
             auto positionKey = make_pair(pos.get_x(), pos.get_y());
             vector<vector<double> >  timeMap;
@@ -311,7 +321,6 @@ void matchWorkers() {
             int target = assignment[wi];
 
             if (target == -1 || costMatrix[wi][target] >= INF) {
-                cout << "No target " << target << endl;
                 // No assigned target
                 worker->calculatedTargetMap = PathfindingMap();
                 continue;
