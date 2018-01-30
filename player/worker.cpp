@@ -90,10 +90,10 @@ double greedyWeightedMatching(vector<vector<double>>& costs, vector<int>& assign
     assignment.resize(costs.size());
     vector<tuple<double,int,int>> costOrder;
     vector<bool> usedTargets(costs[0].size());
-    for (int i = 0; i < costs.size(); i++) {
+    for (int i = 0; i < (int)costs.size(); i++) {
         assignment[i] = -1;
 
-        for (int j = 0; j < costs[i].size(); j++) {
+        for (int j = 0; j < (int)costs[i].size(); j++) {
             costOrder.push_back(make_tuple(costs[i][j], i, j));
         }
     }
@@ -643,10 +643,14 @@ void BotWorker::tick() {
                     score -= karboniteMap.weights[x][y] * 0.001;
                     score -= (structureProximityMap.weights[x][y] + rocketProximityMap.weights[x][y] + enemyNearbyMap.weights[x][y] * 0.01) * 0.001;
                     score *= structurePlacementScore(x, y, Rocket);
+                    if (gc.get_round() > 650 && state.typeCount[Rocket] == 0)
+                        score += 100;
+                    score += timesStuck;
                     macroObjects.emplace_back(score, unit_type_get_blueprint_cost(Rocket), 2, [=]{
                         if(lastRocketBlueprintTurn != (int)gc.get_round() && gc.can_blueprint(id, Rocket, d)){
                             gc.blueprint(id, Rocket, d);
                             lastRocketBlueprintTurn = gc.get_round();
+                            timesStuck = 0;
                         }
                     });
                 }

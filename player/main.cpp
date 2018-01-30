@@ -27,8 +27,10 @@ map<UnitType, string> unitTypeToString;
 bool hasOvercharge;
 bool hasBlink;
 bool enemyHasMages;
+bool hasUnstuckUnit;
 
 int turnsSinceLastFight;
+int timesStuck = 0;
 
 // On average how many units there are around an enemy unit that we can see
 // This is the expected damage multiplier for mages
@@ -219,6 +221,9 @@ struct BotHealer : BotUnit {
     void tick() {
         if (!unit.get_location().is_on_map()) return;
 
+        if (veryLowTimeRemaining)
+            return;
+
         hasDoneTick = true;
 
         auto unitMapLocation = unit.get_location().get_map_location();
@@ -273,9 +278,6 @@ struct BotHealer : BotUnit {
                 succeededHealing = true;
             }
         }
-
-        if (veryLowTimeRemaining)
-            return;
 
         auto nextLocation = getNextLocation();
         moveToLocation(nextLocation);
@@ -1154,6 +1156,7 @@ void updatePassableMap() {
 
 void updateStuckUnitMap() {
     stuckUnitMap = PathfindingMap(w, h);
+    hasUnstuckUnit = false;
     for (const auto& unit : ourUnits) {
         if (!unit.get_location().is_on_map())
             continue;
@@ -1174,6 +1177,8 @@ void updateStuckUnitMap() {
                 }
             }
         }
+        if (moveDirections)
+            hasUnstuckUnit = true;
         double score = 5.0 / (1.0 + moveDirections * moveDirections);
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
@@ -1981,6 +1986,40 @@ int main() {
         // WIP
         createUnits();
         matchWorkers();
+
+        if (!hasUnstuckUnit && state.typeCount[Rocket] == 0) {
+            bool hasDisintegrated = false;
+            for (int iteration = 0; iteration < 2; ++iteration) {
+                for (auto& unit : ourUnits) {
+                    if (unit.get_unit_type() != Worker && (iteration == 0 || unit.get_unit_type() != Factory || !unit.structure_is_built())) {
+                        continue;
+                    }
+                    if (rand()%2)
+                        continue;
+                    if (!unit.get_location().is_on_map())
+                        continue;
+                    const auto location1 = unit.get_location().get_map_location();
+                    for (auto& unit2 : ourUnits) {
+                        if (hasDisintegrated)
+                            break;
+                        if (!unit2.get_location().is_on_map())
+                            continue;
+                        const auto location2 = unit2.get_location().get_map_location();
+                        int dx = location1.get_x() - location2.get_x();
+                        int dy = location1.get_y() - location2.get_y();
+                        if (dx == 0 && dy == 0)
+                            continue;
+                        if (abs(dx) > 1 || abs(dy) > 1)
+                            continue;
+                        timesStuck++;
+                        hasDisintegrated = true;
+                        gc.disintegrate_unit(unit2.get_id());
+                    }
+                }
+            }
+            findUnits();
+            createUnits();
+        }
 
         auto t1 = millis();
         preprocessingComputationTime += t1-t0;

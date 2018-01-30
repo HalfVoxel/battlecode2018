@@ -47,6 +47,7 @@ extern bool lowTimeRemaining;
 extern bool veryLowTimeRemaining;
 extern bool hasOvercharge;
 extern int launchedWorkerCount;
+extern int timesStuck;
 
 extern std::map<unsigned, std::vector<unsigned> > unitShouldGoToRocket;
 
