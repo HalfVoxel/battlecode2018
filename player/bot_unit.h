@@ -39,3 +39,5 @@ extern const float unit_defensive_strategic_value[];
 
 // Relative values of different unit types when at full or almost full health
 extern const float unit_strategic_value[];
+
+void mage_attack(const Unit& unit);
