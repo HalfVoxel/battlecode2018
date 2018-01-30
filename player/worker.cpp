@@ -20,7 +20,7 @@ struct KarboniteGroup {
 vector<KarboniteGroup> groupKarbonite() {
     vector<vector<bool>> covered(w, vector<bool>(h));
     vector<vector<int>> groupIndices(w, vector<int>(h, -1));
-    int maxTimeCostPerGroup = 320;
+    int maxTimeCostPerGroup = 1000;
     vector<KarboniteGroup> groups;
 
     for (int x = 0; x < w; x++) {
