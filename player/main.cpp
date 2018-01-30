@@ -1736,7 +1736,7 @@ void coordinateMageAttacks() {
             auto& botUnit = unitMap[mage.get_id()];
             for (size_t i = 0; i < path.size()-1; ++i) {
                 mage_attack(botUnit->unit);
-                if (botUnit->unit.get_health() <= 0) {
+                if (!gc.has_unit(botUnit->id)) {
                     cout << "Warning! The attacking mage died" << endl;
                     break;
                 }
@@ -1798,6 +1798,10 @@ void coordinateMageAttacks() {
                         gc.blink(botUnit->unit.get_id(), blinkTo);
                         invalidate_unit(botUnit->unit.get_id());
                         mage_attack(botUnit->unit);
+                        if (!gc.has_unit(botUnit->id)) {
+                            cout << "Warning! The attacking mage died" << endl;
+                            break;
+                        }
                         i = j;
                         anyOvercharge = true;
                         location = blinkTo;
@@ -1808,6 +1812,10 @@ void coordinateMageAttacks() {
                 if (i < path.size()-1) {
                     botUnit->moveToLocation(MapLocation(planet, path[i+1].first, path[i+1].second));
                     mage_attack(botUnit->unit);
+                    if (!gc.has_unit(botUnit->id)) {
+                        cout << "Warning! The attacking mage died" << endl;
+                        break;
+                    }
                     location = botUnit->unit.get_location().get_map_location();
                     if (location.get_x() == path[i].first && location.get_y() == path[i].second) {
                         if (!hasDoneAnything) {
@@ -1824,7 +1832,8 @@ void coordinateMageAttacks() {
             }
             if (anyOvercharge)
                 break;
-            mage_attack(botUnit->unit);
+
+            if (gc.has_unit(botUnit->id)) mage_attack(botUnit->unit);
         }
         if (!anyOvercharge)
             break;
