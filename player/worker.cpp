@@ -17,13 +17,6 @@ struct KarboniteGroup {
     int totalValue;
 };
 
-void printMap (vector<vector<int>> values) {
-    for (int y = 0; y < (int)values[0].size(); y++) {
-        for (int x = 0; x < (int)values[0].size(); x++) {
-        }
-    }
-}
-
 vector<KarboniteGroup> groupKarbonite() {
     vector<vector<bool>> covered(w, vector<bool>(h));
     vector<vector<int>> groupIndices(w, vector<int>(h, -1));
@@ -91,6 +84,33 @@ vector<KarboniteGroup> groupKarbonite() {
     }
 
     return groups;
+}
+
+double greedyWeightedMatching(vector<vector<double>>& costs, vector<int>& assignment) {
+    assignment.resize(costs.size());
+    vector<tuple<double,int,int>> costOrder;
+    vector<bool> usedTargets(costs[0].size());
+    for (int i = 0; i < costs.size(); i++) {
+        assignment[i] = -1;
+
+        for (int j = 0; j < costs[i].size(); j++) {
+            costOrder.push_back(make_tuple(costs[i][j], i, j));
+        }
+    }
+    double totalCost = 0;
+    sort(costOrder.begin(), costOrder.end());
+    for (auto tup : costOrder) {
+        double cost;
+        int i, j;
+        tie(cost, i, j) = tup;
+
+        if (assignment[i] != -1 || usedTargets[j]) continue;
+
+        usedTargets[j] = true;
+        assignment[i] = j;
+        totalCost += cost;
+    }
+    return totalCost;
 }
 
 map<pair<int, int>, vector<vector<double> > > cachedTimeMaps;
@@ -308,9 +328,14 @@ void matchWorkers() {
 
         auto hungarianStart = millis();
         vector<int> assignment;
-        matcher.Solve(costMatrix, assignment);
-        assert(assignment.size() == workers.size());
+        if (workers.size() < 30) {
+            matcher.Solve(costMatrix, assignment);
+        } else {
+            greedyWeightedMatching(costMatrix, assignment);
+        }
         hungarianTime += millis() - hungarianStart;
+        assert(assignment.size() == workers.size());
+        
 
         // Reset
         for (int i = 0; i < (int)timeToReachTarget.size(); i++) timeToReachTarget[i] = (int)INF;
