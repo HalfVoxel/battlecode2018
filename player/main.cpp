@@ -922,9 +922,9 @@ void updateFuzzyKarboniteMap() {
             }
             if (planet == Earth) {
                 int disDiff = distanceToInitialLocation[enemyTeam].weights[i][j] - distanceToInitialLocation[ourTeam].weights[i][j];
-                if (disDiff <= 3 && disDiff >= -3) {
+                if (disDiff <= 4 && disDiff >= -4) {
                     contestedKarbonite += karboniteMap.weights[i][j];
-                } else if (disDiff <= 4 && disDiff >= -4) {
+                } else if (disDiff <= 5 && disDiff >= -5) {
                     contestedKarbonite += karboniteMap.weights[i][j] * 0.5f;
                 }
 

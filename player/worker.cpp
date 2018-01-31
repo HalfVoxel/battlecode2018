@@ -658,7 +658,7 @@ void addWorkerActions () {
         int workerCount = state.typeCount[Worker] + replicateCount;
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / workerCount;
         double contestedKarbonitePerWorker = (contestedKarbonite + 0.0) / workerCount;
-        double replicateScore = karbonitePerWorker * 0.01 + contestedKarbonitePerWorker * 0.01 + 5.0 / (workerCount + 0.1);
+        double replicateScore = karbonitePerWorker * 0.01 + contestedKarbonitePerWorker * 0.04 + 5.0 / (workerCount + 0.1);
         if (workerCount > 100 || (karbonitePerWorker < 70 && workerCount >= 10 && planet == Earth)) {
             continue;
         }
