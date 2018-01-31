@@ -11,6 +11,7 @@ int miningSpeed = 3;
 int buildSpeed = 5;
 int repairSpeed = 10;
 int debugRound = -1;
+bool devsFixedReplicationBug = false;
 
 struct KarboniteGroup {
     vector<pii> tiles;
@@ -549,7 +550,7 @@ void BotWorker::tick() {
         if(gc.can_build(id, place.get_id())) {
             const int& placeId = place.get_id();
             double score = (place.get_health() / (0.0 + place.get_max_health()));
-            macroObjects.emplace_back(score, 0, 1, [=]{
+            macroObjects.emplace_back(score, 0, 5 * (!devsFixedReplicationBug), [=]{
                 if(gc.can_build(id, placeId)) {
                     //assert(!hasHarvested);
                     didBuild = true;
@@ -560,7 +561,7 @@ void BotWorker::tick() {
         if(gc.can_repair(id, place.get_id()) && place.get_health() < place.get_max_health()) {
             const int& placeId = place.get_id();
             double score = 2 - (place.get_health() / (0.0 + place.get_max_health()));
-            macroObjects.emplace_back(score, 0, 4, [=]{
+            macroObjects.emplace_back(score, 0, 4 * (!devsFixedReplicationBug), [=]{
                 if(gc.can_repair(id, placeId)) {
                     gc.repair(id, placeId);
                 }
@@ -584,7 +585,7 @@ void BotWorker::tick() {
     }
     if (bestHarvestScore > 0) {
         const Direction& dir = bestHarvestDirection;
-        macroObjects.emplace_back(1, 0, 3, [=]{
+        macroObjects.emplace_back(1, 0, 3 * (!devsFixedReplicationBug), [=]{
             if (gc.can_harvest(id, dir)) {
                 hasHarvested = true;
                 gc.harvest(id, dir);
@@ -705,11 +706,14 @@ void addWorkerActions () {
                                 bestID = unitID;
                                 bestDirection = dir;
                             } else {
+                                if (nextLocation != unitMapLocation && gc.get_karbonite() >= 60 && gc.can_sense_location(nextLocation) && gc.is_occupiable(nextLocation) && unitMapLocation.add(dir) == nextLocation && gc.get_unit(unitID).get_ability_heat() < 10) {
+                                    devsFixedReplicationBug = true;
+                                }
                                 // Replicate in the direction with the most karbonite
                                 for (int d = 0; d < 8; d++) {
                                     if (gc.can_replicate(unitID, (Direction)d)) {
                                         nextLocation = unitMapLocation.add((Direction)d);
-                                        double score2 = score + 0.001*karboniteMap.weights[nextLocation.get_x()][nextLocation.get_y()];
+                                        double score2 = score + 0.00001*karboniteMap.weights[nextLocation.get_x()][nextLocation.get_y()];
                                         if (score2 > bestScore) {
                                             bestScore = score2;
                                             bestID = unitID;
