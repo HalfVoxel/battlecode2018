@@ -466,7 +466,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
         targetMap /= stuckUnitMap + 1.0;
 
         if (unit.get_unit_type() == Mage) {
-            targetMap /= mageNearbyFuzzyMap + 0.1;
+            targetMap /= enemyKnightNearbyMap + mageNearbyFuzzyMap + 0.1;
         }
 
         reusableMaps[reuseObject] = targetMap;

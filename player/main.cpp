@@ -31,6 +31,8 @@ bool enemyHasMages;
 bool enemyHasKnights;
 bool hasUnstuckUnit;
 bool hasBuiltMage;
+double estimatedEnemyKnights = 0;
+double estimatedEnemyRangers = 0;
 
 int turnsSinceLastFight;
 int timesStuck = 0;
@@ -449,6 +451,9 @@ struct BotFactory : BotUnit {
                 if (hasOvercharge) {
                     score += state.typeCount[Healer] * (researchInfo.get_level(Mage) * 0.6 + 1.0);
                 }
+                if (gc.get_round() < 120) {
+                    score += estimatedEnemyKnights * 3.0 / (estimatedEnemyRangers + 1.0);
+                }
                 score /= state.typeCount[Mage] + 1.0;
                 if (enemyHasKnights && !enemyHasRangers && !hasBuiltMage && nearbyEnemiesWeight < 0.75)
                     score += 30;
@@ -739,12 +744,15 @@ void findUnits() {
 }
 
 void updateEnemyHasRangers() {
-    if (enemyHasMages)
-        return;
+    double newEstimate = 0;
     for (auto& u : enemyUnits) {
-        if (u.get_unit_type() == Ranger)
+        if (u.get_unit_type() == Ranger) {
             enemyHasRangers = true;
+            ++newEstimate;
+        }
     }
+    double factor = 0.05;
+    estimatedEnemyRangers = newEstimate * factor + estimatedEnemyRangers * (1 - factor);
 }
 
 void updateEnemyHasMages() {
@@ -757,12 +765,15 @@ void updateEnemyHasMages() {
 }
 
 void updateEnemyHasKnights() {
-    if (enemyHasKnights)
-        return;
+    double newEstimate = 0;
     for (auto& u : enemyUnits) {
-        if (u.get_unit_type() == Knight)
+        if (u.get_unit_type() == Knight) {
             enemyHasKnights = true;
+            ++newEstimate;            
+        }
     }
+    double factor = 0.05;
+    estimatedEnemyKnights = newEstimate * factor + estimatedEnemyKnights * (1 - factor);
 }
 
 void updateAsteroids() {
