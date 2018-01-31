@@ -952,6 +952,7 @@ void updateFuzzyKarboniteMap() {
     fuzzyKarboniteMap = PathfindingMap(w, h);
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
+            double karbs = 0;
             for (int k = -1; k <= 1; k++) {
                 for (int l = -1; l <= 1; l++) {
                     int x = i+k;
@@ -961,7 +962,7 @@ void updateFuzzyKarboniteMap() {
                         kar = log(kar + 1);
                         if (k != 0 || l != 0)
                             kar *= 0.9;
-                        fuzzyKarboniteMap.weights[i][j] = max(fuzzyKarboniteMap.weights[i][j], kar);
+                        karbs = max(karbs, kar);
                     }
                 }
             }
@@ -974,13 +975,15 @@ void updateFuzzyKarboniteMap() {
                 }
 
                 if (disDiff <= 6) {
-                    fuzzyKarboniteMap.weights[i][j] *= 1.2;
+                    karbs *= 1.2;
                 }
                 if (distanceToInitialLocation[enemyTeam].weights[i][j] < 5) {
-                    fuzzyKarboniteMap.weights[i][j] *= 0.7;
+                    karbs *= 0.7;
                 }
-                fuzzyKarboniteMap.weights[i][j] /= 1.0 + workerProximityMap.weights[i][j];
+                karbs /= 1.0 + workerProximityMap.weights[i][j];
             }
+
+            fuzzyKarboniteMap.weights[i][j] = karbs;
         }
     }
 #ifndef NDEBUG
