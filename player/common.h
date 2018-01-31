@@ -7,6 +7,7 @@
 #include <stack>
 #include <map>
 #include <functional>
+#include <signal.h>
 
 #define NO_IMPLICIT_COPIES
 
@@ -71,6 +72,7 @@ extern int lastFactoryBlueprintTurn;
 extern int lastRocketBlueprintTurn;
 extern int initialDistanceToEnemyLocation;
 extern bool workersMove;
+extern volatile sig_atomic_t sigTheRound;
 
 struct State {
     std::map<bc::UnitType, int> typeCount;

@@ -9,6 +9,7 @@
 #endif
 #include <unistd.h>
 #include <ucontext.h>
+#include <sys/time.h>
 
 using namespace bc;
 
@@ -106,11 +107,17 @@ static void addr2line(void* addr) {
 
 #include "stackwalk.h"
 
+#define HAS_BACKTRACE
+
 void print_trace() {
     safe_write("stack trace:\n");
     MozStackWalk([](uint32_t, void* pc, void*, void*) { addr2line(pc); }, 0, 200, nullptr);
     safe_write("--end trace--\n");
 }
+
+#elif !defined(NDEBUG)
+
+#define HAS_BACKTRACE
 
 #endif
 
@@ -131,13 +138,42 @@ static void sighandler(int sig, siginfo_t *si, void* arg) {
     ucontext_t *context = (ucontext_t *)arg;
     addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
 #endif
-#if defined(CUSTOM_BACKTRACE) || !defined(NDEBUG)
+#ifdef HAS_BACKTRACE
     print_trace();
 #endif
     safe_write("flushing stdio\n");
     fflush(stdout);
     fflush(stderr);
     raise(SIGABRT);
+}
+
+volatile sig_atomic_t sigTheRound, sigLastRound = -1;
+static void sighandler_timer(int sig, siginfo_t *si, void* arg) {
+    safe_write("\ntimer signal\n");
+    if (sigLastRound != sigTheRound) {
+        // A round has passed -- that's fine!
+        sigLastRound = sigTheRound;
+        return;
+    }
+    // Note: do not change, the run script depends on this to be able to spot crashes
+    safe_write("\n\n!!! passed 500ms within a single turn\n");
+    safe_write("\n\nPLAYER HAS TIMED OUT!!!\n");
+    safe_write("\non line:\n");
+#ifdef __APPLE__
+    // I think this should work, but untested:
+    // ucontext_t *context = (ucontext_t *)arg;
+    // addr2line((void*)context->uc_mcontext->__ss.__rip);
+    safe_write("(unavailable on macOS)\n");
+#else
+    ucontext_t *context = (ucontext_t *)arg;
+    addr2line((void*)context->uc_mcontext.gregs[REG_RIP]);
+#endif
+#ifdef HAS_BACKTRACE
+    print_trace();
+#endif
+    safe_write("flushing stdio\n");
+    fflush(stdout);
+    fflush(stderr);
 }
 
 void setup_signal_handlers() {
@@ -152,6 +188,16 @@ void setup_signal_handlers() {
     sigaction(SIGTERM,&action,nullptr);
 #ifdef CUSTOM_BACKTRACE
     sigaction(SIGINT,&action,nullptr);
+#endif
+#ifndef NDEBUG
+    action.sa_sigaction = &sighandler_timer;
+    sigaction(SIGVTALRM,&action,nullptr);
+    struct itimerval tm;
+    tm.it_interval.tv_usec = 500000; // every 500ms
+    tm.it_interval.tv_sec = 0;
+    tm.it_value.tv_usec = 500000; // the first after 500ms
+    tm.it_value.tv_sec = 0;
+    setitimer(ITIMER_VIRTUAL, &tm, nullptr);
 #endif
     cerr << "signal setup complete" << endl;
 }

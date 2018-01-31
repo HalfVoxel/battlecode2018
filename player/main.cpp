@@ -1945,6 +1945,7 @@ int main() {
     while (true) {
         time_t t0 = millis();
         unsigned round = gc.get_round();
+        sigTheRound = (sig_atomic_t)round;
         printf("Round: %d\n", round);
         fflush(stdout);
         fflush(stderr);
@@ -2108,7 +2109,7 @@ int main() {
         double turnTime = millis() - t0;
         totalTurnTime += turnTime;
 
-        //if (!lowTimeRemaining) {
+        //if (!lowTimeRemaining)
         if (true) {
             auto t6 = millis();
             cout << "Research: " << (t6 - t5) << endl;
