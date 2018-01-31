@@ -395,9 +395,9 @@ struct BotFactory : BotUnit {
             if (existsPathToEnemy){
                 double score = 1;
                 double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
-                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 22 && gc.get_round() < 80)
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 18 && gc.get_round() < 80)
                     score += 20;
-                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 26 && gc.get_round() < 100)
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 22 && gc.get_round() < 100)
                     score += 5;
                 if (state.typeCount[Factory] >= 3)
                     score *= 0.7;
@@ -1746,6 +1746,7 @@ void coordinateMageAttacks() {
                 mage_attack(botUnit->unit);
                 if (botUnit == nullptr) {
                     cout << "Warning! The attacking mage died" << endl;
+                    anyOvercharge = true;
                     break;
                 }
                 if (!botUnit->unit.get_location().is_on_map()) {
@@ -2128,6 +2129,7 @@ int main() {
         // pause and wait for the next turn.
         fflush(stdout);
         fflush(stderr);
+        cout << "Calling gc.next_turn()" << endl;
         gc.next_turn();
     }
     // I'm convinced C++ is the better option :)

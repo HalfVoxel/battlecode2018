@@ -595,7 +595,7 @@ void BotWorker::tick() {
             if(isOnMap(newLocation) && gc.can_sense_location(newLocation) && gc.is_occupiable(newLocation)) {
                 int x = newLocation.get_x();
                 int y = newLocation.get_y();
-                double score = state.typeCount[Factory] < 4 ? (2.3 - 0.4 * state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
+                double score = state.typeCount[Factory] < 4 ? (1.5 - 0.1 * state.typeCount[Factory]) : 5.0 / (5.0 + state.typeCount[Factory]);
                 if (state.typeCount[Factory] >= 5 && state.typeCount[Factory] * 800 > state.remainingKarboniteOnEarth && state.typeCount[Factory] * 200 > (int)gc.get_karbonite())
                     score = 0;
                 if (state.typeCount[Factory] < 2)
