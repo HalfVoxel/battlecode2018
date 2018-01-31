@@ -665,7 +665,16 @@ void addWorkerActions () {
         int workerCount = state.typeCount[Worker] + replicateCount;
         double karbonitePerWorker = (state.remainingKarboniteOnEarth + 0.0) / workerCount;
         double contestedKarbonitePerWorker = (contestedKarbonite + 0.0) / workerCount;
-        double replicateScore = karbonitePerWorker * 0.008 + contestedKarbonitePerWorker * 0.01 + 4.5 / (workerCount + 0.1);
+        double replicateScore = karbonitePerWorker * 0.01 + contestedKarbonitePerWorker * 0.04;
+
+        // If the enemy is close, we probably want quite a lot of workers in any case (repairs, fast construction etc.)
+        // However if the enemy is far away it might be better to save those resources
+        if (initialDistanceToEnemyLocation < 20) {
+            replicateScore += 5.0 / (workerCount + 0.1);
+        } else {
+            replicateScore += 2.0 / (workerCount + 0.1);
+        }
+
         if (workerCount > 100 || (karbonitePerWorker < 70 && workerCount >= 10 && planet == Earth)) {
             continue;
         }
