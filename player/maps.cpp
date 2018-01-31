@@ -28,5 +28,6 @@ PathfindingMap discoveryMap;
 PathfindingMap distanceToInitialLocation[2];
 PathfindingMap withinRangeMap;
 PathfindingMap rangerCanShootEnemyCountMap;
+PathfindingMap enemyKnightNearbyMap;
 
 map<MapReuseObject, PathfindingMap> reusableMaps;

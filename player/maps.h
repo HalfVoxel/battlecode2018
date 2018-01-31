@@ -29,6 +29,7 @@ extern PathfindingMap discoveryMap;
 extern PathfindingMap distanceToInitialLocation[2];
 extern PathfindingMap withinRangeMap;
 extern PathfindingMap rangerCanShootEnemyCountMap;
+extern PathfindingMap enemyKnightNearbyMap;
 
 enum class MapType { Target, Cost };
 

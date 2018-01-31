@@ -26,8 +26,11 @@ map<UnitType, double> timeConsumptionByUnit;
 map<UnitType, string> unitTypeToString;
 bool hasOvercharge;
 bool hasBlink;
+bool enemyHasRangers;
 bool enemyHasMages;
+bool enemyHasKnights;
 bool hasUnstuckUnit;
+bool hasBuiltMage;
 
 int turnsSinceLastFight;
 int timesStuck = 0;
@@ -465,8 +468,11 @@ struct BotFactory : BotUnit {
                     score += state.typeCount[Healer] * 2;
                 }
                 score /= state.typeCount[Mage] + 1.0;
+                if (enemyHasKnights && !enemyHasRangers && !hasBuiltMage)
+                    score += 30;
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Mage), 2, [=] {
                     if (gc.can_produce_robot(id, Mage)) {
+                        hasBuiltMage = true;
                         gc.produce_robot(id, Mage);
                     }
                 });
@@ -744,12 +750,30 @@ void findUnits() {
         allUnits.push_back(unit.clone());
 }
 
+void updateEnemyHasRangers() {
+    if (enemyHasMages)
+        return;
+    for (auto& u : enemyUnits) {
+        if (u.get_unit_type() == Ranger)
+            enemyHasRangers = true;
+    }
+}
+
 void updateEnemyHasMages() {
     if (enemyHasMages)
         return;
     for (auto& u : enemyUnits) {
         if (u.get_unit_type() == Mage)
             enemyHasMages = true;
+    }
+}
+
+void updateEnemyHasKnights() {
+    if (enemyHasKnights)
+        return;
+    for (auto& u : enemyUnits) {
+        if (u.get_unit_type() == Knight)
+            enemyHasKnights = true;
     }
 }
 
@@ -971,6 +995,7 @@ void updateEnemyInfluenceMaps(){
     healerOverchargeMap = PathfindingMap(w, h);
     enemyExactPositionMap = PathfindingMap(w, h);
     rangerCanShootEnemyCountMap = PathfindingMap(w, h);
+    enemyKnightNearbyMap = PathfindingMap(w, h);
     for (auto& u : enemyUnits) {
         if (u.get_location().is_on_map()) {
             auto pos = u.get_location().get_map_location();
@@ -982,6 +1007,7 @@ void updateEnemyInfluenceMaps(){
             }
             if (u.get_unit_type() == Knight) {
                 enemyInfluenceMap.addInfluenceMultiple(enemyKnightTargetInfluence, pos.get_x(), pos.get_y(), 3.0);
+                enemyKnightNearbyMap.addInfluenceMultiple(mageHideFromKnightInfluence, pos.get_x(), pos.get_y(), 3.0);
             }
             if (u.get_unit_type() == Factory) {
 				enemyFactoryNearbyMap.maxInfluence(enemyFactoryNearbyInfluence, pos.get_x(), pos.get_y());
@@ -2012,7 +2038,9 @@ int main() {
         updateMageNearbyMap();
         updateStructureProximityMap();
         updateDamagedStructuresMap();
+        updateEnemyHasRangers();
         updateEnemyHasMages();
+        updateEnemyHasKnights();
         updateWithinRangeMap();
 
         updateRocketHazardMap();

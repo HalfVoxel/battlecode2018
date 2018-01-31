@@ -26,6 +26,7 @@ vector<vector<double> > rocketProximityInfluence;
 vector<vector<double> > rangerProximityInfluence;
 vector<vector<double> > knightHideFromRangerInfluence;
 vector<vector<double> > knightHideFromKnightInfluence;
+vector<vector<double> > mageHideFromKnightInfluence;
 vector<vector<double> > enemyFactoryNearbyInfluence;
 vector<vector<double> > mageToOverchargeInfluence;
 vector<vector<double> > healerSafetyInfluence;
@@ -141,6 +142,14 @@ void initInfluence() {
                 knightHideFromKnightInfluence[dx+r][dy+r] = 1.5;
             if (maxDis == 2)
                 knightHideFromKnightInfluence[dx+r][dy+r] = 1.0;
+        }
+    }
+    
+    r = 5;
+    mageHideFromKnightInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            mageHideFromKnightInfluence[dx+r][dy+r] = 5.0 / (dx*dx + dy*dy + 1);
         }
     }
     

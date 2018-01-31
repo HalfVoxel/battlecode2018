@@ -502,7 +502,7 @@ PathfindingMap BotUnit::defaultMilitaryCostMap () {
             return costMap;
         }
         else{
-            auto costMap = (passableMap + enemyInfluenceMap * 0.5) / (nearbyFriendMap * 0.3 + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
+            auto costMap = (passableMap + enemyInfluenceMap * 0.5) / (nearbyFriendMap * 0.3 + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0 + enemyKnightNearbyMap;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
