@@ -1946,6 +1946,8 @@ int main() {
         time_t t0 = millis();
         unsigned round = gc.get_round();
         printf("Round: %d\n", round);
+        fflush(stdout);
+        fflush(stderr);
         int timeLeft = gc.get_time_left_ms();
         // If less than 0.5 seconds left, then enter low power mode
         lowTimeRemaining = timeLeft < 4000;
@@ -1965,6 +1967,9 @@ int main() {
         updateAsteroids();
         updateEnemyPositionMap();
         updateNearbyFriendMap();
+
+        fflush(stdout);
+        fflush(stderr);
 
         // NOTE: this call also updates enemy position map for some reason
         updateWorkerMaps();
@@ -2003,6 +2008,9 @@ int main() {
         }
         state.remainingKarboniteOnEarth = karboniteMap.sum();
         state.earthTotalUnitCount = gc.get_team_array(Earth)[0];
+            
+        fflush(stdout);
+        fflush(stderr);
 
         updatePassableMap();
         updateStuckUnitMap();
