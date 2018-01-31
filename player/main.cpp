@@ -231,6 +231,7 @@ struct BotHealer : BotUnit {
         if (gc.is_heal_ready(id)) {
             int bestTargetId = -1;
             double bestTargetRemainingLife = 1000;
+            int healAmount = -unit.get_damage();
             for (auto& u : ourUnits) {
                 if (!u.get_location().is_on_map()) {
                     continue;
@@ -240,6 +241,9 @@ struct BotHealer : BotUnit {
                     if (remainingLife == 1.0) {
                         continue;
                     }
+                    
+                    if (!gc.can_heal(id, u.get_id()))
+                        continue;
 
                     double factor = 1;
                     switch (u.get_unit_type()) {
@@ -263,11 +267,12 @@ struct BotHealer : BotUnit {
                     }
                     remainingLife -= factor;
 
-                    if (gc.can_heal(id, u.get_id())) {
-                        if (remainingLife < bestTargetRemainingLife) {
-                            bestTargetRemainingLife = remainingLife;
-                            bestTargetId = u.get_id();
-                        }
+                    int canHealAmount = min(healAmount, (int)u.get_max_health() - (int)u.get_health());
+                    remainingLife *= canHealAmount;
+
+                    if (remainingLife < bestTargetRemainingLife) {
+                        bestTargetRemainingLife = remainingLife;
+                        bestTargetId = u.get_id();
                     }
                 }
             }
@@ -411,7 +416,7 @@ struct BotFactory : BotUnit {
                     if (gc.get_round() < 120)
                         score += 1;
                 }
-                score += 6 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
+                score += 10 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
                 if (gc.get_round() < 90)
                     score += 15 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
 
@@ -1329,6 +1334,7 @@ bool tickUnits(bool firstIteration, int unitTypes = -1) {
                 continue;
             }
             if (firstIteration) {
+                botunit->hasHarvested = false;
                 botunit->hasDoneTick = false;
             }
             if (!botunit->hasDoneTick && (1 << (int)unit.get_unit_type()) & unitTypes) {
@@ -2045,6 +2051,8 @@ int main() {
         bool firstIteration = true;
         workersMove = false;
         while (true) {
+            fflush(stdout);
+            fflush(stderr);
             auto t2 = millis();
             createUnits();
             cout << "We have " << ourUnits.size() << " units" << endl;

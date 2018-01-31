@@ -11,6 +11,7 @@ struct BotUnit {
     double pathfindingScore;
     bool hasDoneTick;
     bool isRocketFodder;
+    bool hasHarvested;
     BotUnit(const bc::Unit& unit) : unit(unit.clone()), id(unit.get_id()), hasDoneTick(false), isRocketFodder(false) {}
     virtual ~BotUnit() {}
     virtual void tick();

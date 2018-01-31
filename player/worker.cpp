@@ -545,6 +545,7 @@ void BotWorker::tick() {
             double score = (place.get_health() / (0.0 + place.get_max_health()));
             macroObjects.emplace_back(score, 0, 1, [=]{
                 if(gc.can_build(id, placeId)) {
+                    //assert(!hasHarvested);
                     cout << "Building" << endl;
                     didBuild = true;
                     gc.build(id, placeId);
@@ -578,13 +579,14 @@ void BotWorker::tick() {
     }
     if (bestHarvestScore > 0) {
         const Direction& dir = bestHarvestDirection;
-        macroObjects.emplace_back(1, 0, 0, [=]{
+        //macroObjects.emplace_back(1, 0, 0, [=]{
             if (gc.can_harvest(id, dir)) {
+                hasHarvested = true;
                 gc.harvest(id, dir);
                 auto pos = unitMapLocation.add(dir);
                 karboniteMap.weights[pos.get_x()][pos.get_y()] = gc.get_karbonite_at(pos);
             }
-        });
+        //});
     }
 
     if (planet == Earth) {

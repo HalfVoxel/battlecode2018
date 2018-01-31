@@ -384,7 +384,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                     double factor = 1;
                     switch (enemy.get_unit_type()) {
                         case Worker:
-                            factor = 0.1;
+                            factor = 0.05;
                             break;
                         case Ranger:
                             factor = 2.0;
@@ -396,7 +396,7 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                             factor = 1.2;
                             break;
                         case Healer:
-                            factor = 0.9;
+                            factor = 1.3;
                             break;
                         case Factory:
                             factor = 0.6;
