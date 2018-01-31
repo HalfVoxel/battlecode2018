@@ -225,7 +225,7 @@ void mage_attack(const Unit& unit) {
         float value = values[place.get_unit_type()] / (fractional_health + 2.0);
         if (place.get_team() != unit.get_team() && place.get_unit_type() == Knight)
             value += 1;
-        if (place.get_team() == unit.get_team()) value = -value;
+        if (place.get_team() == unit.get_team()) value = -1.5 * value;
 
         auto location = place.get_location().get_map_location();
         for (int dx = -1; dx <= 1; dx++) {

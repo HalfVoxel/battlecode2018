@@ -413,7 +413,7 @@ struct BotFactory : BotUnit {
 
                 if (enemyHasMages)
                     score *= 0.7;
-				score *= 4.0 / (4.0 + state.typeCount[Ranger]);
+				score *= 4.0 / (4.0 + state.typeCount[Ranger] + estimatedEnemyRangers);
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Knight), 2, [=] {
                     if (gc.can_produce_robot(id, Knight)) {
                         gc.produce_robot(id, Knight);
