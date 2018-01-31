@@ -27,6 +27,8 @@ extern PathfindingMap mageNearbyFuzzyMap;
 extern PathfindingMap ourStartingPositionMap;
 extern PathfindingMap discoveryMap;
 extern PathfindingMap distanceToInitialLocation[2];
+extern PathfindingMap withinRangeMap;
+extern PathfindingMap rangerCanShootEnemyCountMap;
 
 enum class MapType { Target, Cost };
 

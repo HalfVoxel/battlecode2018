@@ -416,6 +416,9 @@ struct BotFactory : BotUnit {
                     if (gc.get_round() < 120)
                         score += 1;
                 }
+                if (nearbyEnemiesWeight > 0.95) {
+                    score += 15.0;
+                }
                 score += 10 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
                 if (gc.get_round() < 90)
                     score += 15 * enemyFactoryNearbyMap.weights[location.get_x()][location.get_y()];
@@ -708,6 +711,20 @@ struct Researcher {
 
 void findUnits() {
     ourUnits = gc.get_my_units();
+    sort(ourUnits.begin(), ourUnits.end(), [](const Unit& a, const Unit& b) -> bool
+    { 
+        double scoreA = 0;
+        double scoreB = 0;
+        if (a.get_location().is_on_map()) {
+            const auto locationA = a.get_location().get_map_location();
+            scoreA = rangerCanShootEnemyCountMap.weights[locationA.get_x()][locationA.get_y()];
+        }
+        if (b.get_location().is_on_map()) {
+            const auto locationB = b.get_location().get_map_location();
+            scoreB = rangerCanShootEnemyCountMap.weights[locationB.get_x()][locationB.get_y()];
+        }
+        return scoreA < scoreB;
+    });
     auto planet = gc.get_planet();
     ourTeam = gc.get_team();
     enemyTeam = (Team)(1 - (int)gc.get_team());
@@ -953,6 +970,7 @@ void updateEnemyInfluenceMaps(){
     enemyFactoryNearbyMap = PathfindingMap(w, h);
     healerOverchargeMap = PathfindingMap(w, h);
     enemyExactPositionMap = PathfindingMap(w, h);
+    rangerCanShootEnemyCountMap = PathfindingMap(w, h);
     for (auto& u : enemyUnits) {
         if (u.get_location().is_on_map()) {
             auto pos = u.get_location().get_map_location();
@@ -971,6 +989,7 @@ void updateEnemyInfluenceMaps(){
 			if (u.get_unit_type() != Worker) {
                 enemyNearbyMap.maxInfluence(wideEnemyInfluence, pos.get_x(), pos.get_y());
             }
+            rangerCanShootEnemyCountMap.addInfluence(rangerTargetInfluence, pos.get_x(), pos.get_y());
             enemyPositionMap.weights[pos.get_x()][pos.get_y()] += 1.0;
             enemyExactPositionMap.weights[pos.get_x()][pos.get_y()] = 1;
             healerOverchargeMap.maxInfluence(healerOverchargeInfluence, pos.get_x(), pos.get_y());
@@ -1262,6 +1281,16 @@ void updateRocketAttractionMap() {
                 auto pos = u.get_location().get_map_location();
                 rocketAttractionMap.weights[pos.get_x()][pos.get_y()] = 10;
             }
+        }
+    }
+}
+
+void updateWithinRangeMap() {
+    withinRangeMap = PathfindingMap(w, h);
+    for (auto& u : ourUnits) {
+        if (u.get_location().is_on_map() && u.get_unit_type() == Ranger) {
+            const auto location = u.get_location().get_map_location();
+            withinRangeMap.addInfluence(rangerTargetInfluence, location.get_x(), location.get_y());
         }
     }
 }
@@ -1815,6 +1844,7 @@ void coordinateMageAttacks() {
                         mage_attack(botUnit->unit);
                         if (botUnit == nullptr) {
                             cout << "Warning! The attacking mage died" << endl;
+                            anyOvercharge = true;
                             break;
                         }
                         i = j;
@@ -1829,6 +1859,7 @@ void coordinateMageAttacks() {
                     mage_attack(botUnit->unit);
                     if (botUnit == nullptr) {
                         cout << "Warning! The attacking mage died" << endl;
+                        anyOvercharge = true;
                         break;
                     }
                     location = botUnit->unit.get_location().get_map_location();
@@ -1981,6 +2012,7 @@ int main() {
         updateStructureProximityMap();
         updateDamagedStructuresMap();
         updateEnemyHasMages();
+        updateWithinRangeMap();
 
         updateRocketHazardMap();
         if (planet == Earth) {

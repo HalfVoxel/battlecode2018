@@ -266,6 +266,8 @@ void attack_all_in_range(const Unit& unit) {
 
     if (!unit.get_location().is_on_map()) return;
 
+    if (gc.get_round()%2 && unit.get_unit_type() == Ranger) return;
+
     int attackRange = unit.get_attack_range();
     const auto locus = unit.get_location().get_map_location();
     int x = locus.get_x();
@@ -306,6 +308,8 @@ void attack_all_in_range(const Unit& unit) {
         if (nearbyFriendly <= 2 && place.get_unit_type() == Mage)
             value -= 2;
         value /= (fractional_health + 0.3);
+        //const auto location = place.get_location().get_map_location();
+        //value *= 1.0 + 0.05 * withinRangeMap.weights[location.get_x()][location.get_y()];
 
         if (value > bestValue) {
             bestValue = value;

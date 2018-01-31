@@ -546,7 +546,6 @@ void BotWorker::tick() {
             macroObjects.emplace_back(score, 0, 1, [=]{
                 if(gc.can_build(id, placeId)) {
                     //assert(!hasHarvested);
-                    cout << "Building" << endl;
                     didBuild = true;
                     gc.build(id, placeId);
                 }

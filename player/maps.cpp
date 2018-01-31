@@ -26,5 +26,7 @@ PathfindingMap mageNearbyFuzzyMap;
 PathfindingMap ourStartingPositionMap;
 PathfindingMap discoveryMap;
 PathfindingMap distanceToInitialLocation[2];
+PathfindingMap withinRangeMap;
+PathfindingMap rangerCanShootEnemyCountMap;
 
 map<MapReuseObject, PathfindingMap> reusableMaps;
