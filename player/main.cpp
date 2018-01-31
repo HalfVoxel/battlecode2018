@@ -968,6 +968,8 @@ void updateFuzzyKarboniteMap() {
             }
             if (planet == Earth) {
                 int disDiff = distanceToInitialLocation[enemyTeam].weights[i][j] - distanceToInitialLocation[ourTeam].weights[i][j];
+                // 0 when karbonite is very close to us, 1 when close to enemy, 0.5 when equally close
+                float relativeDiff = distanceToInitialLocation[ourTeam].weights[i][j] / (distanceToInitialLocation[enemyTeam].weights[i][j] + distanceToInitialLocation[ourTeam].weights[i][j]);
                 if (disDiff <= 4 && disDiff >= -4) {
                     contestedKarbonite += karboniteMap.weights[i][j];
                 } else if (disDiff <= 5 && disDiff >= -5) {
@@ -976,6 +978,11 @@ void updateFuzzyKarboniteMap() {
 
                 if (disDiff <= 6) {
                     karbs *= 1.2;
+                }
+
+                karbs *= 1 / (1 + 0.7/2);
+                if (relativeDiff < 0.7) {
+                    karbs *= 1 + 4*relativeDiff;
                 }
                 if (distanceToInitialLocation[enemyTeam].weights[i][j] < 5) {
                     karbs *= 0.7;
