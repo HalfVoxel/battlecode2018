@@ -145,7 +145,7 @@ void matchWorkers() {
 
     HungarianAlgorithm matcher;
     Pathfinder pathfinder;
-    int numTargets = groups.size()*3 + unitTargets.size()*3;
+    int numTargets = groups.size()*3 + unitTargets.size()*5;
 
     // If there are no targets or if we have very little time
     // then fall back to the previous algorithm
@@ -285,9 +285,11 @@ void matchWorkers() {
                 }
 
                 if (minTime >= INF) {
-                    costMatrix[wi][i*3 + 0] = -INF;
-                    costMatrix[wi][i*3 + 1] = -INF;
-                    costMatrix[wi][i*3 + 2] = -INF;
+                    costMatrix[wi][offset + i*5 + 0] = -INF;
+                    costMatrix[wi][offset + i*5 + 1] = -INF;
+                    costMatrix[wi][offset + i*5 + 2] = -INF;
+                    costMatrix[wi][offset + i*5 + 3] = -INF;
+                    costMatrix[wi][offset + i*5 + 4] = -INF;
                     continue;
                 }
 
@@ -306,12 +308,16 @@ void matchWorkers() {
                 score1 = max(score1, 0.0);
                 score2 = max(score2, 0.0);
 
-                costMatrix[wi][offset + i*3 + 0] = score;
-                costMatrix[wi][offset + i*3 + 1] = score / 2;
-                costMatrix[wi][offset + i*3 + 2] = score / 3;
-                timeMatrix[wi][offset + i*3 + 0] = minTime;
-                timeMatrix[wi][offset + i*3 + 1] = minTime;
-                timeMatrix[wi][offset + i*3 + 2] = minTime;
+                costMatrix[wi][offset + i*5 + 0] = score;
+                costMatrix[wi][offset + i*5 + 1] = score * 0.8;
+                costMatrix[wi][offset + i*5 + 2] = score * 0.6;
+                costMatrix[wi][offset + i*5 + 3] = score * 0.4;
+                costMatrix[wi][offset + i*5 + 4] = score * 0.2;
+                timeMatrix[wi][offset + i*5 + 0] = minTime;
+                timeMatrix[wi][offset + i*5 + 1] = minTime;
+                timeMatrix[wi][offset + i*5 + 2] = minTime;
+                timeMatrix[wi][offset + i*5 + 3] = minTime;
+                timeMatrix[wi][offset + i*5 + 4] = minTime;
             }
         }
 
@@ -363,7 +369,7 @@ void matchWorkers() {
 
             if (target >= offset) {
                 // Move towards a building
-                target = (target - offset)/3;
+                target = (target - offset)/5;
                 assert(target < (int)unitTargets.size());
                 auto pos2 = unitTargets[target]->get_map_location();
 

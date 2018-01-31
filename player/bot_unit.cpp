@@ -373,10 +373,10 @@ PathfindingMap BotUnit::defaultMilitaryTargetMap() {
                             factor = 1.2;
                             break;
                         case Healer:
-                            factor = 1.7;
+                            factor = 1.2;
                             break;
                         case Factory:
-                            factor = 1.1;
+                            factor = 1.6;
                             break;
                         case Rocket:
                             factor = 0.9;
