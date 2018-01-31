@@ -983,7 +983,9 @@ void updateFuzzyKarboniteMap() {
             }
         }
     }
+#ifndef NDEBUG
     cout << "ContestedKarbonite: " << contestedKarbonite << endl;
+#endif
     fuzzyKarboniteMap /= ourStartingPositionMap;
 }
 
@@ -1333,7 +1335,9 @@ void analyzeEnemyPositions () {
     // Assume at least a multiplier of 2.
     // Important in the beginning of the game when we cannot see any enemies
     splashDamagePotential = max(splashDamagePotential, 2.0f);
+#ifndef NDEBUG
     cout << "Splash damage potential: " << splashDamagePotential << endl;
+#endif
 
 }
 void createUnits() {
@@ -1352,7 +1356,9 @@ void createUnits() {
                 case Factory: botUnitPtr = new BotFactory(unit); break;
                 case Rocket: botUnitPtr = new BotRocket(unit); break;
                 default:
+#ifndef NDEBUG
                     cout << "Unknown unit type!" << endl;
+#endif
                     exit(1);
             }
             if (unit.get_unit_type() == Worker && state.typeCount[Worker] > 100) {
@@ -1480,7 +1486,9 @@ int computeConnectedness() {
             if (unit.get_team() != enemyTeam && unit.get_location().is_on_map()) {
                 auto pos = unit.get_location().get_map_location();
                 auto path = pathfinder.getPath(pos, targetMap, passableMap2);
+#ifndef NDEBUG
                 cout << "Found path of length " << path.size() << endl;
+#endif
                 if (path.size() > 1) {
                     changed = true;
                     connectedness++;
@@ -1492,7 +1500,9 @@ int computeConnectedness() {
         }
     }
 
+#ifndef NDEBUG
     cout << "Map is " << connectedness << " connected" << endl;
+#endif
     return connectedness;
 }
 
@@ -1585,7 +1595,9 @@ void coordinateRangerAttacks() {
             }
         }
     }
+#ifndef NDEBUG
     cout << "Finished coordinating rangers" << endl;
+#endif
 }
 
 void coordinateMageAttacks() {
@@ -1788,16 +1800,22 @@ void coordinateMageAttacks() {
                 curNode = distanceToMageParent[curNode.first][curNode.second];
             }
             reverse(path.begin(), path.end());
+#ifndef NDEBUG
             for (auto& node : path) {
                 cout << node.first << " " << node.second << " - " << healerMap.weights[node.first][node.second] << " " << distanceToMage.weights[node.first][node.second] << " " << minHealerSum[node.first][node.second] << endl;
             }
+#endif
             MapLocation location(planet, path[0].first, path[0].second);
             if (!canSenseLocation[path[0].first][path[0].second]) {
+#ifndef NDEBUG
                 cout << "Error! Couldn't sense location!" << endl;
+#endif
                 continue;
             }
             if (!gc.has_unit_at_location(location)) {
+#ifndef NDEBUG
                 cout << "Error! Doesn't have unit at location!" << endl;
+#endif
                 continue;
             }
             auto mage = gc.sense_unit_at_location(location);
@@ -1805,12 +1823,16 @@ void coordinateMageAttacks() {
             for (size_t i = 0; i < path.size()-1; ++i) {
                 mage_attack(botUnit->unit);
                 if (botUnit == nullptr) {
+#ifndef NDEBUG
                     cout << "Warning! The attacking mage died" << endl;
+#endif
                     anyOvercharge = true;
                     break;
                 }
                 if (!botUnit->unit.get_location().is_on_map()) {
+#ifndef NDEBUG
                     cout << "Warning! Attacking mage entered a structure" << endl;
+#endif
                     break;
                 }
                 auto location = botUnit->unit.get_location().get_map_location();
@@ -1855,7 +1877,9 @@ void coordinateMageAttacks() {
                     }
                 }
                 if (botUnit->unit.get_movement_heat() >= 10) {
+#ifndef NDEBUG
                     cout << "Warning! Attacking mage couldn't make it to target spot" << endl;
+#endif
                     //assert(0);
                     break;
                 }
@@ -1868,7 +1892,9 @@ void coordinateMageAttacks() {
                         invalidate_unit(botUnit->unit.get_id());
                         mage_attack(botUnit->unit);
                         if (botUnit == nullptr) {
+#ifndef NDEBUG
                             cout << "Warning! The attacking mage died" << endl;
+#endif
                             anyOvercharge = true;
                             break;
                         }
@@ -1883,14 +1909,18 @@ void coordinateMageAttacks() {
                     botUnit->moveToLocation(MapLocation(planet, path[i+1].first, path[i+1].second));
                     mage_attack(botUnit->unit);
                     if (botUnit == nullptr) {
+#ifndef NDEBUG
                         cout << "Warning! The attacking mage died" << endl;
+#endif
                         anyOvercharge = true;
                         break;
                     }
                     location = botUnit->unit.get_location().get_map_location();
                     if (location.get_x() == path[i].first && location.get_y() == path[i].second) {
                         if (!hasDoneAnything) {
+#ifndef NDEBUG
                             cout << "Warning! Attacking mage couldn't make it to target spot" << endl;
+#endif
                             //assert(0);
                             break;
                         }
@@ -1967,12 +1997,14 @@ int main() {
         computeDistancesToInitialLocations();
         mapConnectedness = computeConnectedness();
         existsPathToEnemy = mapConnectedness > 0;
+#ifndef NDEBUG
         if (!existsPathToEnemy) {
             cout << "There doesn't exist a path to the enemy!" << endl;
         }
         else {
             cout << "There exists a path to the enemy!" << endl;
         }
+#endif
     } else {
         // Mars
         // Whatever
@@ -2124,7 +2156,9 @@ int main() {
             fflush(stderr);
             auto t2 = millis();
             createUnits();
+#ifndef NDEBUG
             cout << "We have " << ourUnits.size() << " units" << endl;
+#endif
             if (!veryLowTimeRemaining) {
                 coordinateMageAttacks();
             }
@@ -2134,7 +2168,9 @@ int main() {
             if (hasOvercharge) doOvercharge();
             addWorkerActions();
             auto t3 = millis();
+#ifndef NDEBUG
             cout << "Iteration: " << (t3 - t2) << endl;
+#endif
             
             executeMacroObjects();
 
@@ -2163,13 +2199,16 @@ int main() {
         }
 
         auto t5 = millis();
+#ifndef NDEBUG
         cout << "All iterations: " << std::round(t5 - t1) << endl;
+#endif
         updateResearch();
 
         double turnTime = millis() - t0;
         totalTurnTime += turnTime;
 
         //if (!lowTimeRemaining)
+#ifndef NDEBUG
         if (true) {
             auto t6 = millis();
             cout << "Research: " << (t6 - t5) << endl;
@@ -2197,6 +2236,7 @@ int main() {
             cout << "Attacker success rate: " << averageAttackerSuccessRate << endl;
             cout << "Average healer success rate: " << averageHealerSuccessRate << endl;
         }
+#endif
 
         gc.write_team_array(0, state.totalUnitCount);
 
@@ -2206,7 +2246,9 @@ int main() {
         // pause and wait for the next turn.
         fflush(stdout);
         fflush(stderr);
+#ifndef NDEBUG
         cout << "Calling gc.next_turn()" << endl;
+#endif
         gc.next_turn();
     }
     // I'm convinced C++ is the better option :)

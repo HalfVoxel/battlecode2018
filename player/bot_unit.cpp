@@ -255,7 +255,9 @@ void mage_attack(const Unit& unit) {
         //Attacking 'em enemies
         gc.attack(unit.get_id(), best_unit->get_id());
         invalidate_units();
+#ifndef NDEBUG
         cout << "Mage attack with score " << best_unit_score << endl;
+#endif
         turnsSinceLastFight = 0;
     }
 }
