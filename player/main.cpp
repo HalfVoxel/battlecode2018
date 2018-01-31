@@ -388,9 +388,9 @@ struct BotFactory : BotUnit {
             auto researchInfo = gc.get_research_info();
             if (existsPathToEnemy){
                 double score = 1;
-                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 18 && gc.get_round() < 80)
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 14 && gc.get_round() < 80)
                     score += 20;
-                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 22 && gc.get_round() < 100)
+                if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 18 && gc.get_round() < 100)
                     score += 5;
                 if (state.typeCount[Factory] >= 3)
                     score *= 0.7;
