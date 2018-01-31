@@ -1900,7 +1900,7 @@ int main() {
 #endif
     setup_signal_handlers();
     srand(time(0));
-
+    
     printf("Player C++ bot starting\n");
     printf("Connecting to manager...\n");
 
@@ -1929,6 +1929,7 @@ int main() {
     w = planetMap->get_width();
     h = planetMap->get_height();
     // Side effect: findUnits sets ourTeam and opponentTeam
+    rangerCanShootEnemyCountMap = PathfindingMap(w, h);
     findUnits();
 
     initKarboniteMap();
