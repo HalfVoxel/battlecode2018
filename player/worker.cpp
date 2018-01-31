@@ -560,7 +560,7 @@ void BotWorker::tick() {
         if(gc.can_repair(id, place.get_id()) && place.get_health() < place.get_max_health()) {
             const int& placeId = place.get_id();
             double score = 2 - (place.get_health() / (0.0 + place.get_max_health()));
-            macroObjects.emplace_back(score, 0, 1, [=]{
+            macroObjects.emplace_back(score, 0, 4, [=]{
                 if(gc.can_repair(id, placeId)) {
                     gc.repair(id, placeId);
                 }
@@ -584,7 +584,7 @@ void BotWorker::tick() {
     }
     if (bestHarvestScore > 0) {
         const Direction& dir = bestHarvestDirection;
-        macroObjects.emplace_back(1, 0, 0, [=]{
+        macroObjects.emplace_back(1, 0, 3, [=]{
             if (gc.can_harvest(id, dir)) {
                 hasHarvested = true;
                 gc.harvest(id, dir);
