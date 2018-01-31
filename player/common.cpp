@@ -214,5 +214,5 @@ void setup_signal_handlers() {
     tm.it_value.tv_sec = 0;
     setitimer(ITIMER_VIRTUAL, &tm, nullptr);
 #endif
-    cerr << "signal setup complete" << endl;
+    cout << "signal setup complete" << endl;
 }

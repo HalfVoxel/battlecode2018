@@ -1322,7 +1322,7 @@ void analyzeEnemyPositions () {
     // Assume at least a multiplier of 2.
     // Important in the beginning of the game when we cannot see any enemies
     splashDamagePotential = max(splashDamagePotential, 2.0f);
-    cerr << "Splash damage potential: " << splashDamagePotential << endl;
+    cout << "Splash damage potential: " << splashDamagePotential << endl;
 
 }
 void createUnits() {
@@ -1341,7 +1341,7 @@ void createUnits() {
                 case Factory: botUnitPtr = new BotFactory(unit); break;
                 case Rocket: botUnitPtr = new BotRocket(unit); break;
                 default:
-                    cerr << "Unknown unit type!" << endl;
+                    cout << "Unknown unit type!" << endl;
                     exit(1);
             }
             if (unit.get_unit_type() == Worker && state.typeCount[Worker] > 100) {

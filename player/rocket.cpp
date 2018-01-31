@@ -112,7 +112,7 @@ tuple<bool,MapLocation,int> find_best_landing_spot() {
 
                 int timesVisitedPreviously = visitedMarsRegions[region];
                 float score = (totalResources + totalArea * 0.1f) / ((dontLandSpots.weights[bestInRegion.first][bestInRegion.second] + 1) * (1 + timesVisitedPreviously));
-                cerr << "Area: " << totalArea << " Resources: " << totalResources << " best spot " << bestInRegion.first << " " << bestInRegion.second << " with score " << inRegionScore <<  " => " << score << endl;
+                cout << "Area: " << totalArea << " Resources: " << totalResources << " best spot " << bestInRegion.first << " " << bestInRegion.second << " with score " << inRegionScore <<  " => " << score << endl;
                 if (score > bestScore) {
                     bestScore = score;
                     bestRegion = region;
