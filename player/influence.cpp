@@ -145,11 +145,12 @@ void initInfluence() {
         }
     }
     
-    r = 5;
+    r = 7;
     mageHideFromKnightInfluence = vector<vector<double>>(2*r+1, vector<double>(2*r+1));
     for (int dx = -r; dx <= r; ++dx) {
         for (int dy = -r; dy <= r; ++dy) {
-            mageHideFromKnightInfluence[dx+r][dy+r] = 5.0 / (dx*dx + dy*dy + 1);
+            int dis2 = dx*dx + dy*dy;
+            mageHideFromKnightInfluence[dx+r][dy+r] = 50.0 / (dis2 * dis2);
         }
     }
     

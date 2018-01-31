@@ -35,6 +35,7 @@ extern double matchWorkersDijkstraTime2;
 extern double hungarianTime;
 extern std::map<unsigned int, BotUnit*> unitMap;
 extern std::vector<std::vector<bool> > canSenseLocation;
+extern std::vector<std::vector<bc::Unit*> > unitAtLocation;
 
 extern bc::Team ourTeam;
 extern bc::Team enemyTeam;

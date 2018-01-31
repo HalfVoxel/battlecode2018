@@ -103,6 +103,27 @@ struct BotMage : BotUnit {
     }
 };
 
+vector<Unit*> getUnitsInDisk(MapLocation center, int squaredRadius) {
+    int r = floor(sqrt(squaredRadius));
+    int x = center.get_x();
+    int y = center.get_y();
+    vector<Unit*> ret;
+    for (int dx = -r; dx <= r; ++dx) {
+        for (int dy = -r; dy <= r; ++dy) {
+            int dis2 = dx * dx + dy * dy;
+            if (dis2 > squaredRadius)
+                continue;
+            int nx = x + dx;
+            int ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                continue;
+            if (unitAtLocation[nx][ny] != nullptr)
+                ret.push_back(unitAtLocation[nx][ny]);
+        }
+    }
+    return ret;
+}
+
 
 struct BotHealer : BotUnit {
     BotHealer(const Unit& unit) : BotUnit(unit) {}
@@ -221,35 +242,29 @@ struct BotHealer : BotUnit {
         }
     }
 
-    void tick() {
-        if (!unit.get_location().is_on_map()) return;
-
-        if (veryLowTimeRemaining)
-            return;
-
-        hasDoneTick = true;
-
-        auto unitMapLocation = unit.get_location().get_map_location();
-        bool succeededHealing = false;
-        if (gc.is_heal_ready(id)) {
+    bool healUnits() {
+        if (gc.is_heal_ready(id) && unit.get_location().is_on_map()) {
             int bestTargetId = -1;
             double bestTargetRemainingLife = 1000;
             int healAmount = -unit.get_damage();
-            for (auto& u : ourUnits) {
-                if (!u.get_location().is_on_map()) {
+            for (auto u : getUnitsInDisk(unit.get_location().get_map_location(), 30)) {
+                if (u->get_team() != ourTeam) {
                     continue;
                 }
-                if (is_robot(u.get_unit_type())) {
-                    double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
+                if (!u->get_location().is_on_map()) {
+                    continue;
+                }
+                if (is_robot(u->get_unit_type())) {
+                    double remainingLife = u->get_health() / (u->get_max_health() + 0.0);
                     if (remainingLife == 1.0) {
                         continue;
                     }
                     
-                    if (!gc.can_heal(id, u.get_id()))
+                    if (!gc.can_heal(id, u->get_id()))
                         continue;
 
                     double factor = 1;
-                    switch (u.get_unit_type()) {
+                    switch (u->get_unit_type()) {
                         case Worker:
                             factor = 0.1;
                             break;
@@ -270,12 +285,12 @@ struct BotHealer : BotUnit {
                     }
                     remainingLife -= factor;
 
-                    int canHealAmount = min(healAmount, (int)u.get_max_health() - (int)u.get_health());
+                    int canHealAmount = min(healAmount, (int)u->get_max_health() - (int)u->get_health());
                     remainingLife *= canHealAmount;
 
                     if (remainingLife < bestTargetRemainingLife) {
                         bestTargetRemainingLife = remainingLife;
-                        bestTargetId = u.get_id();
+                        bestTargetId = u->get_id();
                     }
                 }
             }
@@ -283,65 +298,32 @@ struct BotHealer : BotUnit {
                 gc.heal(id, bestTargetId);
                 invalidate_unit(bestTargetId);
                 invalidate_unit(id);
-                succeededHealing = true;
+                return true;
             }
+        }
+        return false;
+    }
+
+    void tick() {
+        if (!unit.get_location().is_on_map()) return;
+        
+        auto unitMapLocation = unit.get_location().get_map_location();
+
+        hasDoneTick = true;
+
+        bool succeededHealing = false;
+
+        succeededHealing = healUnits();
+
+        if (veryLowTimeRemaining) {
+            return;
         }
 
         auto nextLocation = getNextLocation();
         moveToLocation(nextLocation);
 
-        if(!succeededHealing && gc.is_heal_ready(id)) {
-            int bestTargetId = -1;
-            double bestTargetRemainingLife = 1000;
-            for (auto& u : ourUnits) {
-                if (!u.get_location().is_on_map()) {
-                    continue;
-                }
-                if (is_robot(u.get_unit_type())) {
-                    if (u.get_id() == id) {
-                        continue;
-                    }
-                    double remainingLife = u.get_health() / (u.get_max_health() + 0.0);
-                    if (remainingLife == 1.0) {
-                        continue;
-                    }
-
-                    double factor = 1;
-                    switch (u.get_unit_type()) {
-                        case Worker:
-                            factor = 0.1;
-                            break;
-                        case Mage:
-                            factor = 1.3;
-                            break;
-                        case Ranger:
-                            factor = 1.0;
-                            break;
-                        case Healer:
-                            factor = 1.2;
-                            break;
-                        case Knight:
-                            factor = 1.1;
-                            break;
-                        default:
-                            break;
-                    }
-                    remainingLife -= factor;
-
-                    if (gc.can_heal(id, u.get_id())) {
-                        if (remainingLife < bestTargetRemainingLife) {
-                            bestTargetRemainingLife = remainingLife;
-                            bestTargetId = u.get_id();
-                        }
-                    }
-                }
-            }
-            if (bestTargetId != -1) {
-                gc.heal(id, bestTargetId);
-                invalidate_unit(bestTargetId);
-                invalidate_unit(id);
-                succeededHealing = true;
-            }
+        if(!succeededHealing) {
+            succeededHealing = healUnits();
         }
         double interpolationFactor = 0.99;
         averageHealerSuccessRate = averageHealerSuccessRate * interpolationFactor + succeededHealing * (1-interpolationFactor);
@@ -401,6 +383,7 @@ struct BotFactory : BotUnit {
         if (!unit.is_factory_producing()) {
             const auto& location = unit.get_location().get_map_location();
             double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
+            auto researchInfo = gc.get_research_info();
             if (existsPathToEnemy){
                 double score = 1;
                 if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 18 && gc.get_round() < 80)
@@ -445,7 +428,6 @@ struct BotFactory : BotUnit {
             }
             {
                 double score = 0;
-                auto researchInfo = gc.get_research_info();
                 if (state.typeCount[Worker] == 0 && (researchInfo.get_level(Rocket) >= 1 || state.typeCount[Factory] < 3)) {
                     score += 10;
                 }
@@ -465,7 +447,7 @@ struct BotFactory : BotUnit {
                 // Not even sure about this, but yeah. If a mage hit will on average hit 4 enemies, go for it (compare to ranger score of 2)
                 double score = splashDamagePotential * 0.5; // enemyInfluenceMap.weights[location.get_x()][location.get_y()] * 0.4;
                 if (hasOvercharge) {
-                    score += state.typeCount[Healer] * 2;
+                    score += state.typeCount[Healer] * (researchInfo.get_level(Mage) * 0.6 + 1.0);
                 }
                 score /= state.typeCount[Mage] + 1.0;
                 if (enemyHasKnights && !enemyHasRangers && !hasBuiltMage && nearbyEnemiesWeight < 0.75)
@@ -497,7 +479,7 @@ struct BotFactory : BotUnit {
                     score /= state.typeCount[Healer] + 1.0;
                     score += averageHealerSuccessRate * 1.5;
                     if (hasOvercharge)
-                        score += 1.0;
+                        score += 0.8;
                     macroObjects.emplace_back(score, unit_type_get_factory_cost(Healer), 2, [=] {
                         if (gc.can_produce_robot(id, Healer)) {
                             gc.produce_robot(id, Healer);
@@ -716,6 +698,7 @@ struct Researcher {
 };
 
 void findUnits() {
+    unitAtLocation = vector<vector<Unit*> >(w, vector<Unit*>(h, nullptr));
     ourUnits = gc.get_my_units();
     sort(ourUnits.begin(), ourUnits.end(), [](const Unit& a, const Unit& b) -> bool
     { 
@@ -744,8 +727,13 @@ void findUnits() {
                 enemyUnits.emplace_back(move(unit));
         }
     }
-    for (auto& unit : ourUnits)
+    for (auto& unit : ourUnits) {
         allUnits.push_back(unit.clone());
+        if (unit.get_location().is_on_map()) {
+            const auto location = unit.get_location().get_map_location();
+            unitAtLocation[location.get_x()][location.get_y()] = &unit;
+        }
+    }
     for (auto& unit : enemyUnits)
         allUnits.push_back(unit.clone());
 }

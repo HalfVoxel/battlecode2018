@@ -497,7 +497,7 @@ PathfindingMap BotUnit::defaultMilitaryCostMap () {
             return costMap;
         }
         else if (unit.get_unit_type() == Ranger){
-            auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0;
+            auto costMap = (passableMap + enemyInfluenceMap * 2.0) / (nearbyFriendMap + 1.0) + structureProximityMap * 0.1 + rocketHazardMap * 10.0 + enemyKnightNearbyMap;
             reusableMaps[reuseObject] = costMap;
             return costMap;
         }
