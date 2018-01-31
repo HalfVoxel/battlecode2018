@@ -177,7 +177,7 @@ struct BotHealer : BotUnit {
             if (hasOvercharge) {
                 targetMap += healerOverchargeMap * 10;
             }
-            targetMap /= (enemyNearbyMap + stuckUnitMap + 1.0);
+            targetMap /= (enemyInfluenceMap * 10.0 + stuckUnitMap + 1.0);
             targetMap /= rocketHazardMap + 0.1;
             reusableMaps[reuseObject] = targetMap;
         }
@@ -400,9 +400,9 @@ struct BotFactory : BotUnit {
 
         if (!unit.is_factory_producing()) {
             const auto& location = unit.get_location().get_map_location();
+            double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
             if (existsPathToEnemy){
                 double score = 1;
-                double nearbyEnemiesWeight = enemyNearbyMap.weights[location.get_x()][location.get_y()];
                 if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 18 && gc.get_round() < 80)
                     score += 20;
                 if (distanceToInitialLocation[enemyTeam].weights[location.get_x()][location.get_y()] < 22 && gc.get_round() < 100)
@@ -468,7 +468,7 @@ struct BotFactory : BotUnit {
                     score += state.typeCount[Healer] * 2;
                 }
                 score /= state.typeCount[Mage] + 1.0;
-                if (enemyHasKnights && !enemyHasRangers && !hasBuiltMage)
+                if (enemyHasKnights && !enemyHasRangers && !hasBuiltMage && nearbyEnemiesWeight < 0.75)
                     score += 30;
                 macroObjects.emplace_back(score, unit_type_get_factory_cost(Mage), 2, [=] {
                     if (gc.can_produce_robot(id, Mage)) {
