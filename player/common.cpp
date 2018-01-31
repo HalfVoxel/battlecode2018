@@ -60,12 +60,15 @@ vector<vector<Unit*> > unitAtLocation;
 void invalidate_unit(unsigned int id) {
 	auto t0 = millis();
     if (unitMap.count(id)) {
-        auto& unit = unitMap[id]->unit;
-        if (unit.get_location().is_on_map()) {
-            const auto location = unit.get_location().get_map_location();
-            Unit* u = unitAtLocation[location.get_x()][location.get_y()];
-            if (u == nullptr || u->get_id() == unit.get_id())
-                unitAtLocation[location.get_x()][location.get_y()] = nullptr;
+        auto botunit = unitMap[id];
+        if (botunit != nullptr) {
+            auto& unit = botunit->unit;
+            if (unit.get_location().is_on_map()) {
+                const auto location = unit.get_location().get_map_location();
+                Unit* u = unitAtLocation[location.get_x()][location.get_y()];
+                if (u == nullptr || u->get_id() == unit.get_id())
+                    unitAtLocation[location.get_x()][location.get_y()] = nullptr;
+            }
         }
     }
     if (gc.has_unit(id)) {
