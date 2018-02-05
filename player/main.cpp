@@ -2109,7 +2109,15 @@ int main() {
                 state.totalRobotDamage += unit.get_max_health() - unit.get_health();
             }
         }
-        state.remainingKarboniteOnEarth = karboniteMap.sum();
+        
+        if (planet == Earth) {
+            state.remainingKarboniteOnEarth = 0;
+            for (int x = 0; x < w; x++) {
+                for (int y = 0; y < h; y++) {
+                    state.remainingKarboniteOnEarth += 20.0 * karboniteMap.weights[x][y] / (distanceToInitialLocation[ourTeam].weights[x][y] + 10.0 + gc.get_round() * 0.4);
+                }
+            }
+        }
         state.earthTotalUnitCount = gc.get_team_array(Earth)[0];
             
         fflush(stdout);

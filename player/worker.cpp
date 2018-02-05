@@ -414,7 +414,7 @@ void matchWorkers() {
 // Will be on the order of magnitude of 1 for a well placed factory
 // May be negative, but mostly in the [0,1] range
 double structurePlacementScore(int x, int y, UnitType unitType) {
-    double nearbyTileScore = 0;
+    double nearbyTileScore = 1;
     for (int dx = -1; dx <= 1; dx++) {
         for (int dy = -1; dy <= 1; dy++) {
             if (dx == 0 && dy == 0) continue;
@@ -427,7 +427,7 @@ double structurePlacementScore(int x, int y, UnitType unitType) {
             }
         }
     }
-    nearbyTileScore /= 8.0f;
+    nearbyTileScore /= 16.0f;
     assert(nearbyTileScore <= 1.01f);
     assert(nearbyTileScore >= 0);
 
