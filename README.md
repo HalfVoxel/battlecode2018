@@ -17,7 +17,7 @@ Scripts
 
 The `./backup <tag>` script will create a backup of the current bot with the specified name.
 
-`./run -b <tag>` will run a tournament against a bot with the specified tag on all maps. See `./run --help` for more options.
+`./run --tournament -b <tag>` will run a tournament against a bot with the specified tag on all maps. See `./run --help` for more options.
 The output will look something like while running:
 
 ![Tournament](images/tournament.png)
