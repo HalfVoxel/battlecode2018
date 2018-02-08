@@ -10,6 +10,8 @@ Research rockets so that we can leave no later than the flood. However, it's pro
 
 Potential rush strategy: Instead of building a factory near our starting position, let a worker go to the enemy and build it there instead. This way we can still build a good economy in the beginning of the game, while still being able to attack the enemy early.
 
+Link to 2017 bot: https://github.com/HalfVoxel/battlecode2017
+
 Scripts
 -------
 
