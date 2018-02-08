@@ -1,5 +1,6 @@
 Orbitary Graph's Battlecode bot for 2018
 ========================================
+<div style="text-align:center; width=200px;"><img src ="icon/orbitrary_graph_icon_transparent.png" /></div>
 
 Strategy considerations:
 
